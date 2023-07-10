@@ -5,7 +5,8 @@ from collections import namedtuple
 
 from leapp.exceptions import StopActorExecutionError
 from leapp.libraries.common import mounting, utils
-from leapp.libraries.stdlib import CalledProcessError, api, run
+from leapp.libraries.common.config import get_env
+from leapp.libraries.stdlib import api, CalledProcessError, run
 
 
 OVERLAY_DO_NOT_MOUNT = ('tmpfs', 'devpts', 'sysfs', 'proc', 'cramfs', 'sysv', 'vfat')
@@ -161,7 +162,7 @@ def _overlay_disk_size_old():
     Convenient function to retrieve the overlay disk size
     """
     try:
-        env_size = os.getenv('LEAPP_OVL_SIZE', default='2048')
+        env_size = get_env('LEAPP_OVL_SIZE', '2048')
         disk_size = int(env_size)
     except ValueError:
         disk_size = 2048
