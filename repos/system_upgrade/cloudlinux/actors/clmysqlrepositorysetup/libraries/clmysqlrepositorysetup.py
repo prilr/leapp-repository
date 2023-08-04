@@ -44,7 +44,7 @@ def build_install_list(prefix):
 
 
 def process():
-    mysql_types = []
+    mysql_types = set()
     clmysql_type = None
     custom_repo_msgs = []
 
@@ -92,7 +92,7 @@ def process():
                     ))
 
             if any(repo.enabled for repo in repofile_data.data):
-                mysql_types.append('cloudlinux')
+                mysql_types.add('cloudlinux')
                 leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
                 api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
             else:
@@ -126,7 +126,7 @@ def process():
             if any(repo.enabled for repo in repofile_data.data):
                 # Since MariaDB URLs have major versions written in, we need a new repo file
                 # to feed to the target userspace.
-                mysql_types.append('mariadb')
+                mysql_types.add('mariadb')
                 leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
                 api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
             else:
@@ -139,6 +139,11 @@ def process():
             repofile_data = repofileutils.parse_repofile(full_repo_path)
 
             for repo in repofile_data.data:
+                # URLs look like this:
+                # baseurl = https://repo.mysql.com/yum/mysql-8.0-community/el/7/x86_64/
+                repo.repoid = repo.repoid + '-8'
+                repo.baseurl = repo.baseurl.replace('/el/7/', '/el/8/')
+
                 if repo.enabled:
                     # MySQL package repos don't have these versions available for EL8 anymore.
                     # There'll be nothing to upgrade to.
@@ -163,21 +168,18 @@ def process():
                                 )
                             )
                         ])
-                    else:
-                        # URLs look like this:
-                        # baseurl = https://repo.mysql.com/yum/mysql-8.0-community/el/7/x86_64/
-                        repo.repoid = repo.repoid + '-8'
-                        repo.baseurl = repo.baseurl.replace('/el/7/', '/el/8/')
-                        api.current_logger().debug('Generating custom MySQL repo: {}'.format(repo.repoid))
-                        custom_repo_msgs.append(CustomTargetRepository(
-                            repoid=repo.repoid,
-                            name=repo.name,
-                            baseurl=repo.baseurl,
-                            enabled=repo.enabled,
-                        ))
+                    api.current_logger().debug('Generating custom MySQL repo: {}'.format(repo.repoid))
+                    custom_repo_msgs.append(CustomTargetRepository(
+                        repoid=repo.repoid,
+                        name=repo.name,
+                        baseurl=repo.baseurl,
+                        enabled=repo.enabled,
+                    ))
 
             if any(repo.enabled for repo in repofile_data.data):
-                mysql_types.append('mysql')
+                # MySQL typically has multiple repo files, so we want to make sure we're
+                # adding the type to list only once.
+                mysql_types.add('mysql')
                 leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
                 api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
             else:
@@ -204,7 +206,7 @@ def process():
         if len(mysql_types) == 1:
             api.current_logger().debug(
                 "Detected MySQL/MariaDB type: {}, version: {}".format(
-                    mysql_types[0], clmysql_type
+                    list(mysql_types)[0], clmysql_type
                 )
             )
         else:
@@ -236,6 +238,6 @@ def process():
         )
 
     api.produce(InstalledMySqlTypes(
-        types=mysql_types,
+        types=list(mysql_types),
         version=clmysql_type,
     ))
