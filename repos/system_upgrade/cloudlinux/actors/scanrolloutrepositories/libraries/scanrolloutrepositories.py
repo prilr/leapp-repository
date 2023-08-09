@@ -37,7 +37,7 @@ def process_repodata(rollout_repodata, repofile_name):
         )
 
     resdata = [{repo.repoid: [repo.name, repo.baseurl]} for repo in rollout_repodata.data]
-    api.current_logger().debug("DEBUG REPODATA: {}".format(resdata))
+    api.current_logger().debug("Rollout repository {} repodata: {}".format(repofile_name, resdata))
 
     rollout_reponame = repofile_name[:-len(REPOFILE_SUFFIX)]
     leapp_repocopy_path = create_leapp_repofile_copy(rollout_repodata, rollout_reponame)
