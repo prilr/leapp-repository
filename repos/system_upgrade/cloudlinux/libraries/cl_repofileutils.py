@@ -22,6 +22,13 @@ def create_leapp_repofile_copy(repofile_data, repo_name):
     Create a copy of an existing Yum repository config file, modified
     to be used during the Leapp transaction.
     It will be placed inside the isolated overlay environment Leapp runs the upgrade from.
+
+    :param repofile_data: Data of the repository file copy to be created.
+    :type repofile_data: RepositoryFile
+    :param repo_name: Name of the rollout repository file, without the .repo extension.
+    :type repo_name: str
+    :return: Path to the created copy of the repository file.
+    :rtype: str
     """
     if not os.path.isdir(TEMP_DIR):
         os.makedirs(TEMP_DIR)
