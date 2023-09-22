@@ -26,14 +26,14 @@ class CheckRhnVersionOverride(Actor):
                     summary = ('The RHN config file up2date has a set value of the versionOverride option.'
                                ' This value will get overwritten by the upgrade process, and non-supported values'
                                ' carry a risk of causing issues during the upgrade.')
-                    remediation = ('Remove the versionOverride value from the up2date config file'
-                                   ' before running Leapp again.')
+                    hint_remediation = ('Remove the versionOverride value from the up2date config file'
+                                   ' - /etc/sysconfig/rhn/up2date - before running Leapp again.')
                     reporting.create_report([
                         reporting.Title(title),
                         reporting.Summary(summary),
                         reporting.Severity(reporting.Severity.HIGH),
                         reporting.Tags([reporting.Tags.OS_FACTS]),
                         reporting.Flags([reporting.Flags.INHIBITOR]),
-                        reporting.Remediation(hint=remediation),
+                        reporting.Remediation(hint=hint_remediation),
                         reporting.RelatedResource('file', '/etc/sysconfig/rhn/up2date')
                     ])
