@@ -26,18 +26,14 @@ class CheckRhnVersionOverride(Actor):
                     versionOverrideValue = stripped_line[1]
                     # If the version is being overriden to 8, we can continue as is.
                     if versionOverrideValue not in ['', '8']:
-                        title = 'RHN up2date: versionOverride not empty'
-                        summary = ('The RHN config file up2date has a set value of the versionOverride option: {}.'
-                                ' This value will get overwritten by the upgrade process, and non-supported values'
-                                ' carry a risk of causing issues during the upgrade.'.format(versionOverrideValue))
-                        hint_remediation = ('Remove the versionOverride value from the up2date config file'
-                                    ' - /etc/sysconfig/rhn/up2date - before running Leapp again.')
+                        title = 'RHN up2date: versionOverride overwritten by the upgrade'
+                        summary = ("The RHN config file up2date has a set value of the versionOverride option: {}."
+                                " This value will get overwritten by the upgrade process, and reset to an empty"
+                                " value once it's complete.".format(versionOverrideValue))
                         reporting.create_report([
                             reporting.Title(title),
                             reporting.Summary(summary),
-                            reporting.Severity(reporting.Severity.HIGH),
+                            reporting.Severity(reporting.Severity.MEDIUM),
                             reporting.Tags([reporting.Tags.OS_FACTS]),
-                            reporting.Flags([reporting.Flags.INHIBITOR]),
-                            reporting.Remediation(hint=hint_remediation),
                             reporting.RelatedResource('file', '/etc/sysconfig/rhn/up2date')
                         ])
