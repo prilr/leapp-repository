@@ -46,11 +46,11 @@ def process():
             )
             continue
 
-        api.current_logger().debug(
-            "Vendor {} found in active list, processing file".format(vendor_name)
-        )
         full_repo_path = os.path.join(VENDORS_DIR, reponame)
         repofile = repofileutils.parse_repofile(full_repo_path)
+        api.current_logger().debug(
+            "Vendor {} found in active list, processing file {}".format(vendor_name, reponame)
+        )
 
         api.produce(CustomTargetRepositoryFile(file=full_repo_path))
 

@@ -53,7 +53,7 @@ class VendorRepoSignatureScanner(Actor):
                 continue
 
             self.log.debug(
-                "Vendor {} found in active list, processing file".format(vendor_name)
+                "Vendor {} found in active list, processing file {}".format(vendor_name, sigfile_name)
             )
 
             full_sigfile_path = os.path.join(VENDORS_DIR, sigfile_name)
