@@ -9,8 +9,18 @@ from leapp.libraries.stdlib import api
 # TODO: unify the list in one place. A separate common file, perhaps?
 TO_REINSTALL = [
     "gettext-devel",
+    "alt-ruby25-rubygem-rack",
+    "alt-ruby26-rubygem-rack",
+    "alt-ruby27-rubygem-rack",
+    "alt-ruby30-rubygem-rack",
     "alt-ruby31-rubygem-rack",
+    "alt-ruby32-rubygem-rack",
+    "alt-ruby25-rubygem-rackup",
+    "alt-ruby26-rubygem-rackup",
+    "alt-ruby27-rubygem-rackup",
+    "alt-ruby30-rubygem-rackup",
     "alt-ruby31-rubygem-rackup",
+    "alt-ruby32-rubygem-rackup",
 ]  # These packages will be marked for installation
 TO_DELETE = []  # These won't be
 
