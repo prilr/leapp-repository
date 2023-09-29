@@ -46,7 +46,7 @@ class CheckSkippedRepositories(Actor):
                 reporting.Tags([reporting.Tags.REPOSITORY]),
                 reporting.Remediation(
                     hint='You can file a request to add this repository to the scope of in-place upgrades '
-                         'by filing a support ticket')
+                         'by creating a pull request to the cloudlinux/leapp-data GitHub repository')
             ] + packages_related + repos_related)
 
             if config.is_verbose():
