@@ -214,7 +214,7 @@ def _transaction(context, stage, target_repoids, tasks, plugin_info, test=False,
             api.current_logger().error('Could not call dnf command: Message: %s', str(e), exc_info=True)
             raise StopActorExecutionError(
                 message='Failed to execute dnf. Reason: {}'.format(str(e))
-            )
+            ) from e
         except CalledProcessError as e:
             err_stdout = e.stdout
             err_stderr = e.stderr
@@ -227,7 +227,7 @@ def _transaction(context, stage, target_repoids, tasks, plugin_info, test=False,
                 message='DNF execution failed with non zero exit code.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}'.format(
                     stdout=err_stdout, stderr=err_stderr
                 )
-            )
+            ) from e
         finally:
             if stage == 'check':
                 backup_debug_data(context=context)
