@@ -15,6 +15,27 @@ from leapp.libraries.common.cl_repofileutils import (
     REPOFILE_SUFFIX,
     LEAPP_COPY_SUFFIX
 )
+from leapp import reporting
+
+def report_inhibitor(repofile_name):
+    reporting.create_report(
+        [
+            reporting.Title(
+                "CloudLinux Rollout repositories need to be disabled for the upgrade to proceed."
+            ),
+            reporting.Summary(
+                "Your system has CloudLinux/Imunify Rollout repositories enabled."
+                " These repositories need to be disabled for the upgrade to proceed."
+                " Please disable them by running the following command:"
+                " sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/{}.repo."
+                " It's also recommended to revert the installed packages"
+                " to their stable versions.".format(repofile_name)
+            ),
+            reporting.Severity(reporting.Severity.HIGH),
+            reporting.Tags([reporting.Tags.OS_FACTS, reporting.Tags.AUTHENTICATION]),
+            reporting.Flags([reporting.Flags.INHIBITOR]),
+        ]
+    )
 
 
 def process_repodata(rollout_repodata, repofile_name):
@@ -54,6 +75,11 @@ def process_repofile(repofile_name, used_list):
             "No used repositories found in {}, skipping".format(repofile_name)
         )
         return
+
+    # TODO: remove this once we figure up a proper way to handle rollout
+    # repositories as a part of the upgrade process.
+    report_inhibitor(repofile_name)
+    return
 
     api.current_logger().debug("Rollout file {} has used repositories, adding".format(repofile_name))
     process_repodata(rollout_repodata, repofile_name)
