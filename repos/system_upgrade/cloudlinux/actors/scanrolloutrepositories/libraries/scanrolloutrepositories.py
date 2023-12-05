@@ -24,16 +24,13 @@ def report_inhibitor(repofile_name):
                 "CloudLinux Rollout repositories need to be disabled for the upgrade to proceed."
             ),
             reporting.Summary(
-                "Your system has CloudLinux/Imunify Rollout repositories enabled."
-                " These repositories need to be disabled for the upgrade to proceed."
-                " Please disable them by running the following command:"
-                " sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/{}.repo."
-                " It's also recommended to revert the installed packages"
-                " to their stable versions.".format(repofile_name)
+                "Your system has CloudLinux/Imunify Rollout repositories enabled with packages from them installed."
+                " These repositories cannot be used as a part of the upgrade process."
+                " As such, the upgrade process will attempt to upgrade the packages from standard CloudLinux"
+                " repositories, which may result in some packages being downgraded or keeping their CL7 versions."
             ),
-            reporting.Severity(reporting.Severity.HIGH),
-            reporting.Tags([reporting.Tags.OS_FACTS, reporting.Tags.AUTHENTICATION]),
-            reporting.Flags([reporting.Flags.INHIBITOR]),
+            reporting.Severity(reporting.Severity.MEDIUM),
+            reporting.Tags([reporting.Tags.OS_FACTS, reporting.Tags.UPGRADE_PROCESS, reporting.Tags.REPOSITORY]),
         ]
     )
 
@@ -69,17 +66,21 @@ def process_repofile(repofile_name, used_list):
     full_rollout_repo_path = os.path.join(REPO_DIR, repofile_name)
     rollout_repodata = repofileutils.parse_repofile(full_rollout_repo_path)
 
-    # Ignore the repositories (and their files) that are enabled, but have no packages installed from them.
+    # Ignore the repositories (and their files) that are enabled, but have no
+    # packages installed from them.
+    # That's what "used" means in this context - repo that is both enabled and
+    # has at least one package installed from it.
     if not any(repo.repoid in used_list for repo in rollout_repodata.data):
         api.current_logger().debug(
             "No used repositories found in {}, skipping".format(repofile_name)
         )
-        return
+        return False
 
     # TODO: remove this once we figure up a proper way to handle rollout
     # repositories as a part of the upgrade process.
+    api.current_logger().debug("Rollout file {} has used repositories".format(repofile_name))
     report_inhibitor(repofile_name)
-    return
+    return True
 
     api.current_logger().debug("Rollout file {} has used repositories, adding".format(repofile_name))
     process_repodata(rollout_repodata, repofile_name)
@@ -99,4 +100,6 @@ def process():
             "Detected a rollout repository file: {}".format(repofile_name)
         )
 
-        process_repofile(repofile_name, used_list)
+        used_rollout_repo_found = process_repofile(repofile_name, used_list)
+        if used_rollout_repo_found:
+            break
