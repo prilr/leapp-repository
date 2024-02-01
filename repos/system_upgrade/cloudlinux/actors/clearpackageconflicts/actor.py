@@ -19,41 +19,62 @@ class ClearPackageConflicts(Actor):
     produces = ()
     tags = (DownloadPhaseTag.Before, IPUWorkflowTag)
 
-    @run_on_cloudlinux
-    def process(self):
-        problem_packages = [
-            "alt-python37-six",
-            "alt-python37-pytz",
-        ]
-
+    def problem_packages_installed(self, problem_packages):
         problem_packages_installed = False
         for pkg in problem_packages:
             if has_package(InstalledRPM, pkg):
                 self.log.debug("Conflicting package {} detected".format(pkg))
                 problem_packages_installed = True
                 break
+        return problem_packages_installed
 
-        if problem_packages_installed:
-            problem_dirs = [
-                "/opt/alt/python37/lib/python3.7/site-packages/six-1.15.0-py3.7.egg-info",
-                "/opt/alt/python37/lib/python3.7/site-packages/pytz-2017.2-py3.7.egg-info",
-            ]
-            problem_files = []
+    def clear_problem_files(self, problem_files, problem_dirs):
+        for p_dir in problem_dirs:
+            try:
+                if os.path.isdir(p_dir):
+                    shutil.rmtree(p_dir)
+                    self.log.debug("Conflicting directory {} removed".format(p_dir))
+            except OSError as e:
+                if e.errno != errno.ENOENT:
+                    raise
 
-            for p_dir in problem_dirs:
-                try:
-                    if os.path.isdir(p_dir):
-                        shutil.rmtree(p_dir)
-                        self.log.debug("Conflicting directory {} removed".format(p_dir))
-                except OSError as e:
-                    if e.errno != errno.ENOENT:
-                        raise
+        for p_file in problem_files:
+            try:
+                if os.path.isfile(p_file):
+                    os.remove(p_file)
+                    self.log.debug("Conflicting file {} removed".format(p_file))
+            except OSError as e:
+                if e.errno != errno.ENOENT:
+                    raise
 
-            for p_file in problem_files:
-                try:
-                    if os.path.isfile(p_file):
-                        os.remove(p_file)
-                        self.log.debug("Conflicting file {} removed".format(p_file))
-                except OSError as e:
-                    if e.errno != errno.ENOENT:
-                        raise
+    def alt_python37_handle(self):
+        problem_packages = [
+            "alt-python37-six",
+            "alt-python37-pytz",
+        ]
+        problem_files = []
+        problem_dirs = [
+            "/opt/alt/python37/lib/python3.7/site-packages/six-1.15.0-py3.7.egg-info",
+            "/opt/alt/python37/lib/python3.7/site-packages/pytz-2017.2-py3.7.egg-info",
+        ]
+
+        if self.problem_packages_installed(problem_packages):
+            self.clear_problem_files(problem_files, problem_dirs)
+
+    def openssl_handle(self):
+        problem_packages = [
+            "openssl11-libs"
+        ]
+        problem_files = [
+            "/usr/lib64/.libcrypto.so.1.1.1k.hmac",
+            "/usr/lib64/.libssl.so.1.1.1k.hmac"
+        ]
+        problem_dirs = []
+
+        if self.problem_packages_installed(problem_packages):
+            self.clear_problem_files(problem_files, problem_dirs)
+
+    @run_on_cloudlinux
+    def process(self):
+        self.alt_python37_handle()
+        self.openssl_handle()
