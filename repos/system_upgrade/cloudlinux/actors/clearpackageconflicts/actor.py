@@ -20,13 +20,11 @@ class ClearPackageConflicts(Actor):
     tags = (DownloadPhaseTag.Before, IPUWorkflowTag)
 
     def problem_packages_installed(self, problem_packages):
-        problem_packages_installed = False
         for pkg in problem_packages:
             if has_package(InstalledRPM, pkg):
                 self.log.debug("Conflicting package {} detected".format(pkg))
-                problem_packages_installed = True
-                break
-        return problem_packages_installed
+                return True
+        return False
 
     def clear_problem_files(self, problem_files, problem_dirs):
         for p_dir in problem_dirs:
