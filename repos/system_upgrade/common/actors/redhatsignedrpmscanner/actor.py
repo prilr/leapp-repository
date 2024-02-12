@@ -134,8 +134,8 @@ class VendorSignedRpmScanner(Actor):
                 ):
                     signed_pkgs.items.append(pkg)
                     self.log.debug(
-                        "Package {} is signed, packager: {}, signature: {}".format(
-                            pkg.name, pkg.packager, pkg.pgpsig
+                        "Package {} is signed, repository: {}, packager: {}, signature: {}".format(
+                            pkg.name, pkg.repository, pkg.packager, pkg.pgpsig
                         )
                     )
                     continue

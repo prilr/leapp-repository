@@ -9,7 +9,7 @@ from leapp.reporting import Report
 
 class SwitchClnChannel(Actor):
     """
-    Switch CLN channel from 7 to 8 to be able to download upgrade packages
+    Switch CLN channel from 7 to 8 to be able to download upgrade packages.
     """
 
     name = "switch_cln_channel"

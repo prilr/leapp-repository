@@ -26,7 +26,7 @@ def add_permitrootlogin_conf():
 
             permit_autoconf = [
                 "# Automatically added by Leapp to preserve RHEL7 default\n",
-                "# behaviour after migration.\n",
+                "# behavior after migration.\n",
                 "# Placed on top of the file to avoid being included into Match blocks.\n",
                 "PermitRootLogin yes\n"
                 "\n",
