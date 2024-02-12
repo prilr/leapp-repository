@@ -17,25 +17,15 @@ class ClearPackageConflicts(Actor):
     consumes = (InstalledRPM,)
     produces = ()
     tags = (DownloadPhaseTag.Before, IPUWorkflowTag)
-
-    def __init__(self):
-        self._rpm_lookup = None
-
-    @property
-    def rpm_lookup(self):
-        """
-        Get and store the list of installed RPMs for quick lookup.
-        """
-        if not self._rpm_lookup:
-            self._rpm_lookup = {rpm for rpm in self.consume(InstalledRPM)}
-        return self._rpm_lookup
+    rpm_lookup = None
 
     def has_package(self, name):
         """
         Check whether the package is installed.
         Looks only for the package name, nothing else.
         """
-        return name in self.rpm_lookup
+        if self.rpm_lookup:
+            return name in self.rpm_lookup
 
     def problem_packages_installed(self, problem_packages):
         """
@@ -106,5 +96,6 @@ class ClearPackageConflicts(Actor):
 
     @run_on_cloudlinux
     def process(self):
+        self.rpm_lookup = {rpm for rpm in self.consume(InstalledRPM)}
         self.alt_python37_handle()
         self.openssl_handle()
