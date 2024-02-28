@@ -23,14 +23,11 @@ class SwitchClnChannel(Actor):
     def process(self):
         switch_cmd = [self.switch_bin, "-t", "8", "-o", "-f"]
         yum_clean_cmd = ["yum", "clean", "all"]
-        update_release_cmd = ["yum", "update", "-y", "cloudlinux-release"]
         try:
             res = run(switch_cmd)
             self.log.debug('Command "%s" result: %s', switch_cmd, res)
             res = run(yum_clean_cmd)  # required to update the repolist
             self.log.debug('Command "%s" result: %s', yum_clean_cmd, res)
-            res = run(update_release_cmd)
-            self.log.debug('Command "%s" result: %s', update_release_cmd, res)
         except CalledProcessError as e:
             reporting.create_report(
                 [
