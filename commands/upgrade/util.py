@@ -201,7 +201,9 @@ def ask_to_continue():
             "up to and including making it *completely inaccessible*.\n"
             "Even if you've followed all the preparation steps correctly, "
             "the chance of the upgrade going wrong remains non-zero.\n"
-            "Make sure you've run the pre-check, checked the logs and reports, and have a backup prepared."
+            "Make sure you've run the pre-check and checked the logs and reports.\n"
+            "Do you confirm that you've successfully taken and tested a full backup of your server?\n"
+            "Rollback will not be possible."
         )
         print(warn_msg)
 
