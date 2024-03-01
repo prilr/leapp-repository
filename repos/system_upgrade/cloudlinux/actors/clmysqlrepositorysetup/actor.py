@@ -1,6 +1,6 @@
 from leapp.actors import Actor
 from leapp.reporting import Report
-from leapp.libraries.actor import clmysqlrepositorysetup
+from leapp.libraries.actor.clmysqlrepositorysetup import MySqlRepositorySetupLibrary
 from leapp.models import (
     CustomTargetRepository,
     CustomTargetRepositoryFile,
@@ -32,4 +32,5 @@ class ClMysqlRepositorySetup(Actor):
 
     @run_on_cloudlinux
     def process(self):
-        clmysqlrepositorysetup.process()
+        mysql_reposetup = MySqlRepositorySetupLibrary()
+        mysql_reposetup.process()
