@@ -63,7 +63,7 @@ class FilterRpmTransactionTasks(Actor):
         to_remove.difference_update(to_keep)
 
         # run upgrade for the rest of RH signed pkgs which we do not have rule for
-        to_upgrade = installed_pkgs - (to_install | to_remove | to_reinstall)
+        to_upgrade = installed_pkgs - (to_install | to_remove | to_keep | to_reinstall)
 
         self.log.debug('DNF modules to enable: {}'.format(modules_to_enable.keys()))
 
