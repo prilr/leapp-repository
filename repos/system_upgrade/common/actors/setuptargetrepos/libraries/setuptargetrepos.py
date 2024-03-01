@@ -127,6 +127,13 @@ def _get_vendor_custom_repos(enabled_repos, mapping_list):
 
     return result
 
+def _get_skipped_repoids(enabled_repoids, mapped_repoids, used_repoids):
+    skipped_repoids = enabled_repoids & used_repoids - mapped_repoids
+    # Skip elevate repos - their presence is not supposed to be reported as skipped,
+    # we keep all of the packages from them (leapp, etc.) unupgraded anyway.
+    skipped_repoids = {repoid for repoid in skipped_repoids if "elevate" not in repoid}
+    return skipped_repoids
+
 
 def process():
     # load all data / messages
@@ -153,7 +160,7 @@ def process():
     repomap = _setup_repomap_handler(enabled_repoids, mapping_list)
     mapped_repoids = _get_mapped_repoids(repomap, enabled_repoids)
     api.current_logger().debug('Mapped repos: {}'.format(mapped_repoids))
-    skipped_repoids = enabled_repoids & set(used_repoids_dict.keys()) - mapped_repoids
+    skipped_repoids = _get_skipped_repoids(enabled_repoids, mapped_repoids, set(used_repoids_dict.keys()))
 
     # Now get the info what should be the target RHEL repositories
     expected_repos = repomap.get_expected_target_pesid_repos(enabled_repoids)
