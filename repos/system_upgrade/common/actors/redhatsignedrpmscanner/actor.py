@@ -88,9 +88,17 @@ class VendorSignedRpmScanner(Actor):
             """
             return (  # pylint: disable-msg=consider-using-ternary
                 pkg.name == "gpg-pubkey"
-                and (pkg.packager.startswith(vendor_packager))
                 or all_signed
             )
+
+        def is_leapp_package(pkg):
+            """Check if the package is related to leapp
+
+            We should consider these packages signed as unsigned packages are not considered in transaction
+            task manipulations, and as such are ignored by transaction directives like to_keep.
+            That means that Leapp would attempt to upgrade them during the transaction and fail.
+            """
+            return "leapp" in pkg.name
 
         def has_katello_prefix(pkg):
             """Whitelist the katello package."""
@@ -129,6 +137,7 @@ class VendorSignedRpmScanner(Actor):
                         is_gpg_pubkey(pkg),
                         has_katello_prefix(pkg),
                         has_cpanel_prefix(pkg),
+                        is_leapp_package(pkg),
                         is_azure_pkg(pkg),
                     ]
                 ):
