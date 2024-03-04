@@ -6,6 +6,7 @@ from leapp.models import (
     CustomTargetRepositoryFile,
     InstalledMySqlTypes,
     RpmTransactionTasks,
+    RepositoriesMapping,
     InstalledRPM,
 )
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
@@ -26,6 +27,7 @@ class ClMysqlRepositorySetup(Actor):
         CustomTargetRepositoryFile,
         InstalledMySqlTypes,
         RpmTransactionTasks,
+        RepositoriesMapping,
         Report,
     )
     tags = (FactsPhaseTag, IPUWorkflowTag)

@@ -72,8 +72,14 @@ def _setup_repomap_handler(src_repoids, mapping_list):
         repositories=combined_repositories
     )
 
+    mapping_string = "\n".join(
+        ["{} -> {}".format(entry.source, entry.target) for entry in combined_repomapping.mapping]
+    )
+    api.current_logger().debug('Yielded combined mapping: \n{}'.format(mapping_string))
+
     rhui_info = next(api.consume(RHUIInfo), RHUIInfo(provider=''))
     repomap = setuptargetrepos_repomap.RepoMapDataHandler(combined_repomapping, cloud_provider=rhui_info.provider)
+
     # TODO(pstodulk): what about skip this completely and keep the default 'ga'..?
     default_channels = setuptargetrepos_repomap.get_default_repository_channels(repomap, src_repoids)
     repomap.set_default_channels(default_channels)

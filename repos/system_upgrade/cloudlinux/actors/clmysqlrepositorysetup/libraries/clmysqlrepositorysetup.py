@@ -6,6 +6,9 @@ from leapp.models import (
     CustomTargetRepository,
     RpmTransactionTasks,
     InstalledRPM,
+    RepositoriesMapping,
+    RepoMapEntry,
+    PESIDRepositoryEntry,
     Module,
 )
 from leapp.libraries.stdlib import api
@@ -44,6 +47,34 @@ def build_install_list(prefix):
     return to_upgrade
 
 
+def make_pesid_repo(pesid, major_version, repoid, arch='x86_64', repo_type='rpm', channel='ga', rhui=''):
+    """
+    PESIDRepositoryEntry factory function allowing shorter data description by providing default values.
+    """
+    return PESIDRepositoryEntry(
+        pesid=pesid,
+        major_version=major_version,
+        repoid=repoid,
+        arch=arch,
+        repo_type=repo_type,
+        channel=channel,
+        rhui=rhui
+    )
+
+
+def construct_repomap_data(source_id, target_id):
+    """
+    Construct the repository mapping data.
+    """
+    return RepositoriesMapping(
+        mapping=[RepoMapEntry(source=source_id, target=[target_id])],
+        repositories=[
+            make_pesid_repo(source_id, '7', source_id),
+            make_pesid_repo(target_id, '8', target_id)
+        ]
+    )
+
+
 class MySqlRepositorySetupLibrary(object):
     """
     Detect the various MySQL/MariaDB variants that may be installed on the system
@@ -57,6 +88,7 @@ class MySqlRepositorySetupLibrary(object):
         self.clmysql_type = None
         # Messages to send about custom generated package repositories.
         self.custom_repo_msgs = []
+        self.mapping_msgs = []
 
     def clmysql_process(self, repofile_name, repofile_data):
         """
@@ -69,16 +101,17 @@ class MySqlRepositorySetupLibrary(object):
         api.current_logger().debug("repoids from CloudLinux repofile {}: {}".format(repofile_name, data_to_log))
 
         # Were any repositories enabled?
-        for repo in repofile_data.data:
+        for source_repo in repofile_data.data:
             # cl-mysql URLs look like this:
             # baseurl=http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.3/$basearch/
             # We don't want any duplicate repoid entries.
-            repo.repoid = repo.repoid + "-8"
+            target_repo = source_repo
+            target_repo.repoid = target_repo.repoid + "-8"
             # releasever may be something like 8.6, while only 8 is acceptable.
-            repo.baseurl = repo.baseurl.replace("/cl$releasever/", "/cl8/")
+            target_repo.baseurl = target_repo.baseurl.replace("/cl$releasever/", "/cl8/")
 
             # Old CL MySQL versions (5.0 and 5.1) won't be available in CL8.
-            if any(ver in repo.baseurl for ver in OLD_CLMYSQL_VERSIONS):
+            if any(ver in target_repo.baseurl for ver in OLD_CLMYSQL_VERSIONS):
                 reporting.create_report(
                     [
                         reporting.Title("An old CL-MySQL version will no longer be available in EL8"),
@@ -86,7 +119,7 @@ class MySqlRepositorySetupLibrary(object):
                             "A an old CloudLinux-provided MySQL version is installed on this system. "
                             "It will no longer be available on the target system. "
                             "This situation cannot be automatically resolved by Leapp. "
-                            "Problematic repository: {0}".format(repo.repoid)
+                            "Problematic repository: {0}".format(target_repo.repoid)
                         ),
                         reporting.Severity(reporting.Severity.MEDIUM),
                         reporting.Tags([reporting.Tags.REPOSITORY]),
@@ -103,16 +136,19 @@ class MySqlRepositorySetupLibrary(object):
             # mysqlclient is usually disabled when installed from CL MySQL Governor.
             # However, it should be enabled for the Leapp upgrade, seeing as some packages
             # from it won't update otherwise.
-            if repo.enabled or repo.repoid == "mysqclient-8":
+            if target_repo.enabled or target_repo.repoid == "mysqclient-8":
                 self.clmysql_type = get_clmysql_type()
-                api.current_logger().debug("Generating custom cl-mysql repo: {}".format(repo.repoid))
+                api.current_logger().debug("Generating custom cl-mysql repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
-                        repoid=repo.repoid,
-                        name=repo.name,
-                        baseurl=repo.baseurl,
+                        repoid=target_repo.repoid,
+                        name=target_repo.name,
+                        baseurl=target_repo.baseurl,
                         enabled=True,
                     )
+                )
+                self.mapping_msgs.append(
+                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
 
         if any(repo.enabled for repo in repofile_data.data):
@@ -129,25 +165,29 @@ class MySqlRepositorySetupLibrary(object):
         Versions of MariaDB installed from https://mariadb.org/.
         """
 
-        for repo in repofile_data.data:
+        for source_repo in repofile_data.data:
             # Maria URLs look like this:
             # baseurl = https://archive.mariadb.org/mariadb-10.3/yum/centos/7/x86_64
             # baseurl = https://archive.mariadb.org/mariadb-10.7/yum/centos7-ppc64/
             # We want to replace the 7 in OS name after /yum/
-            repo.repoid = repo.repoid + "-8"
-            url_parts = repo.baseurl.split("yum")
+            target_repo = source_repo
+            target_repo.repoid = target_repo.repoid + "-8"
+            url_parts = target_repo.baseurl.split("yum")
             url_parts[1] = "yum" + url_parts[1].replace("7", "8")
-            repo.baseurl = "".join(url_parts)
+            target_repo.baseurl = "".join(url_parts)
 
-            if repo.enabled:
-                api.current_logger().debug("Generating custom MariaDB repo: {}".format(repo.repoid))
+            if target_repo.enabled:
+                api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
-                        repoid=repo.repoid,
-                        name=repo.name,
-                        baseurl=repo.baseurl,
-                        enabled=repo.enabled,
+                        repoid=target_repo.repoid,
+                        name=target_repo.name,
+                        baseurl=target_repo.baseurl,
+                        enabled=target_repo.enabled,
                     )
+                )
+                self.mapping_msgs.append(
+                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
 
         if any(repo.enabled for repo in repofile_data.data):
@@ -166,19 +206,20 @@ class MySqlRepositorySetupLibrary(object):
         Versions of MySQL installed from https://mysql.com/.
         """
 
-        for repo in repofile_data.data:
+        for source_repo in repofile_data.data:
             # URLs look like this:
             # baseurl = https://repo.mysql.com/yum/mysql-8.0-community/el/7/x86_64/
             # Remember that we always want to modify names, to avoid "duplicate repository" errors.
-            repo.repoid = repo.repoid + "-8"
-            repo.baseurl = repo.baseurl.replace("/el/7/", "/el/8/")
+            target_repo = source_repo
+            target_repo.repoid = target_repo.repoid + "-8"
+            target_repo.baseurl = target_repo.baseurl.replace("/el/7/", "/el/8/")
 
-            if repo.enabled:
+            if target_repo.enabled:
                 # MySQL package repos don't have these versions available for EL8 anymore.
                 # There's only 8.0 available.
                 # There'll be nothing to upgrade to.
                 # CL repositories do provide them, though.
-                if any(ver in repo.name for ver in OLD_MYSQL_UPSTREAM_VERSIONS):
+                if any(ver in target_repo.name for ver in OLD_MYSQL_UPSTREAM_VERSIONS):
                     reporting.create_report(
                         [
                             reporting.Title("An old MySQL version will no longer be available in EL8"),
@@ -186,7 +227,7 @@ class MySqlRepositorySetupLibrary(object):
                                 "A yum repository for an old MySQL version is enabled on this system. "
                                 "It will no longer be available on the target system. "
                                 "This situation cannot be automatically resolved by Leapp. "
-                                "Problematic repository: {0}".format(repo.repoid)
+                                "Problematic repository: {0}".format(target_repo.repoid)
                             ),
                             reporting.Severity(reporting.Severity.MEDIUM),
                             reporting.Tags([reporting.Tags.REPOSITORY]),
@@ -201,14 +242,17 @@ class MySqlRepositorySetupLibrary(object):
                             ),
                         ]
                     )
-                api.current_logger().debug("Generating custom MySQL repo: {}".format(repo.repoid))
+                api.current_logger().debug("Generating custom MySQL repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
-                        repoid=repo.repoid,
-                        name=repo.name,
-                        baseurl=repo.baseurl,
-                        enabled=repo.enabled,
+                        repoid=target_repo.repoid,
+                        name=target_repo.name,
+                        baseurl=target_repo.baseurl,
+                        enabled=target_repo.enabled,
                     )
+                )
+                self.mapping_msgs.append(
+                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
 
         if any(repo.enabled for repo in repofile_data.data):
@@ -238,6 +282,8 @@ class MySqlRepositorySetupLibrary(object):
             )
 
             for msg in self.custom_repo_msgs:
+                api.produce(msg)
+            for msg in self.mapping_msgs:
                 api.produce(msg)
 
             if len(self.mysql_types) == 1:

@@ -41,6 +41,6 @@ def get_clmysql_type():
     Get the currently active MySQL type from the Governor configuration file.
     """
     if os.path.isfile(CL7_MYSQL_TYPE_FILE):
-        with open(CL7_MYSQL_TYPE_FILE, "r", encoding="utf-8") as mysql_f:
+        with open(CL7_MYSQL_TYPE_FILE, "r") as mysql_f:
             return mysql_f.read()
     return None
