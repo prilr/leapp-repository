@@ -221,7 +221,7 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
                 'This is required to pull the correct packages for the upgrade.'
                 'However, if the upgrade stops at a later stage, you may want to switch back to the original channel.'
             ),
-            reporting.Tags([reporting.Tags.SYSTEM]),
+            reporting.Tags([reporting.Tags.UPGRADE_PROCESS, reporting.Tags.AUTHENTICATION]),
             reporting.Severity(reporting.Severity.MEDIUM),
             reporting.Remediation(hint=(
                 'Set the channel back to CL7 using the command: cln-switch-channel -t 7 -o -f'
