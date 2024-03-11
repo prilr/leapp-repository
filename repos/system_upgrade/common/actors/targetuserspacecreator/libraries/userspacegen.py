@@ -209,7 +209,7 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
             )
 
         api.current_logger().debug('Checking the CLN registration status')
-        context.call(['clnreg_ks'], callback_raw=utils.logging_handler)
+        context.call(['rhn_check'], callback_raw=utils.logging_handler)
         switch_bin = "/usr/sbin/cln-switch-channel"
         switch_cmd = [switch_bin, "-t", "8", "-o", "-f"]
         context.call(switch_cmd, callback_raw=utils.logging_handler)
