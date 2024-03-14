@@ -6,7 +6,7 @@ from leapp.libraries.stdlib import CalledProcessError, run, api
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 
 from leapp.models import (
-    RequiredUpgradeInitramPackages,  # deprecated
+    TargetUserSpacePreupgradeTasks,
     TargetUserSpaceUpgradeTasks,
     CopyFile
 )
@@ -28,7 +28,7 @@ def rhn_to_target_userspace():
             if os.path.isfile(src_path):
                 files_to_copy.append(CopyFile(src=src_path))
 
-    api.produce(RequiredUpgradeInitramPackages(packages=REQUIRED_PKGS))
+    api.produce(TargetUserSpacePreupgradeTasks(install_rpms=REQUIRED_PKGS, copy_files=files_to_copy))
     api.produce(TargetUserSpaceUpgradeTasks(install_rpms=REQUIRED_PKGS, copy_files=files_to_copy))
 
 
@@ -39,7 +39,7 @@ class CheckClLicense(Actor):
 
     name = 'check_cl_license'
     consumes = ()
-    produces = (Report, RequiredUpgradeInitramPackages, TargetUserSpaceUpgradeTasks)
+    produces = (Report, TargetUserSpacePreupgradeTasks, TargetUserSpaceUpgradeTasks)
     tags = (ChecksPhaseTag, IPUWorkflowTag)
 
     system_id_path = '/etc/sysconfig/rhn/systemid'

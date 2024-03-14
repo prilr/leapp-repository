@@ -60,6 +60,7 @@ def install(target_basedir):
         shutil.copy2(
             api.get_file_path(DNF_PLUGIN_NAME),
             os.path.join(target_basedir, DNF_PLUGIN_PATH.lstrip('/')))
+        api.current_logger().debug('Installing DNF plugin to {}'.format(DNF_PLUGIN_PATH))
     except EnvironmentError as e:
         api.current_logger().debug('Failed to install DNF plugin', exc_info=True)
         raise StopActorExecutionError(
@@ -375,6 +376,7 @@ def perform_transaction_check(target_userspace_info, used_repos, tasks, xfs_info
     """
     with _prepare_perform(used_repos=used_repos, target_userspace_info=target_userspace_info, xfs_info=xfs_info,
                           storage_info=storage_info) as (context, overlay, target_repoids):
+        api.current_logger().debug('DNF plugin target repoids: {}'.format(target_repoids))
         apply_workarounds(overlay.nspawn())
         dnfconfig.exclude_leapp_rpms(context)
         _transaction(

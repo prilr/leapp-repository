@@ -133,6 +133,35 @@ def _backup_to_persistent_package_cache(userspace_dir):
                 target_context.copytree_from('/var/cache/dnf', PERSISTENT_PACKAGE_CACHE_DIR)
 
 
+def enable_spacewalk_module(context):
+    enabled_repos = ["cloudlinux8-baseos"]
+    target_major_version = get_target_major_version()
+    repos_opt = [['--enablerepo', repo] for repo in enabled_repos]
+    repos_opt = list(itertools.chain(*repos_opt))
+
+    api.current_logger().debug('Enabling module for target userspace: satellite-5-client')
+
+    cmd = ['dnf',
+            'module',
+            'enable',
+            'satellite-5-client',
+            '-y',
+            '--nogpgcheck',
+            '--setopt=module_platform_id=platform:el{}'.format(target_major_version),
+            '--setopt=keepcache=1',
+            '--releasever', api.current_actor().configuration.version.target,
+            '--installroot', '/el{}target'.format(target_major_version),
+            '--disablerepo', '*'
+            ] + repos_opt
+    try:
+        context.call(cmd, callback_raw=utils.logging_handler)
+    except CalledProcessError as exc:
+        raise StopActorExecutionError(
+            message='Unable to activate spacewalk module.',
+            details={'details': str(exc), 'stderr': exc.stderr}
+        )
+
+
 def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
     """
     Implement the creation of the target userspace.
@@ -146,6 +175,14 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         source=userspace_dir, target=os.path.join(context.base_dir, 'el{}target'.format(target_major_version))
     ):
         _restore_persistent_package_cache(userspace_dir)
+
+        api.current_logger().debug('Installing cloudlinux-release')
+        context.call(['rpm', '--import', 'https://repo.cloudlinux.com/cloudlinux/security/RPM-GPG-KEY-CloudLinux'], callback_raw=utils.logging_handler)
+        context.call(['dnf', '-y', 'localinstall', 'https://repo.cloudlinux.com/cloudlinux/migrate/release-files/cloudlinux/8/x86_64/cloudlinux8-release-current.x86_64.rpm'], callback_raw=utils.logging_handler)
+
+        enable_spacewalk_module(context)
+
+        api.current_logger().debug('Installing packages into target userspace: {}'.format(packages))
 
         repos_opt = [['--enablerepo', repo] for repo in enabled_repos]
         repos_opt = list(itertools.chain(*repos_opt))
@@ -170,6 +207,26 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
                 message='Unable to install RHEL {} userspace packages.'.format(target_major_version),
                 details={'details': str(exc), 'stderr': exc.stderr}
             )
+
+        api.current_logger().debug('Checking the CLN registration status')
+        context.call(['rhn_check'], callback_raw=utils.logging_handler)
+        switch_bin = "/usr/sbin/cln-switch-channel"
+        switch_cmd = [switch_bin, "-t", "8", "-o", "-f"]
+        context.call(switch_cmd, callback_raw=utils.logging_handler)
+
+        reporting.create_report([
+            reporting.Title('CLN channel switched to CL8.'),
+            reporting.Summary(
+                'The CLN channel for this system has been switched from CL7 to CL8.'
+                'This is required to pull the correct packages for the upgrade.'
+                'However, if the upgrade stops at a later stage, you may want to switch back to the original channel.'
+            ),
+            reporting.Tags([reporting.Tags.UPGRADE_PROCESS, reporting.Tags.AUTHENTICATION]),
+            reporting.Severity(reporting.Severity.MEDIUM),
+            reporting.Remediation(hint=(
+                'Set the channel back to CL7 using the command: cln-switch-channel -t 7 -o -f'
+            )),
+        ])
 
 
 def _get_all_rhui_pkgs():
@@ -231,6 +288,23 @@ def _prep_repository_access(context, target_userspace):
         run(['rm', '-rf', os.path.join(target_etc, 'rhsm')])
         context.copytree_from('/etc/pki', os.path.join(target_etc, 'pki'))
         context.copytree_from('/etc/rhsm', os.path.join(target_etc, 'rhsm'))
+
+    # Copy RHN data independent from RHSM config
+    if os.path.isdir('/etc/sysconfig/rhn'):
+        context.call(['/usr/sbin/rhn_check'], callback_raw=utils.logging_handler)
+        run(['rm', '-rf', os.path.join(target_etc, 'sysconfig/rhn')])
+        context.copytree_from('/etc/sysconfig/rhn', os.path.join(target_etc, 'sysconfig/rhn'))
+        # Set up spacewalk plugin config
+        with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'r') as f:
+            lines = f.readlines()
+            new_lines = []
+            for line in lines:
+                if 'enabled' in line:
+                    line = 'enabled = 1\n'
+                new_lines.append(line)
+        with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'w') as f:
+            f.writelines(new_lines)
+
     # NOTE: we cannot just remove the original target yum.repos.d dir
     # as e.g. in case of RHUI a special RHUI repofiles are installed by a pkg
     # when the target userspace container is created. Removing these files we loose

@@ -1,6 +1,6 @@
 import os
 from leapp.actors import Actor
-from leapp.tags import InterimPreparationPhaseTag, IPUWorkflowTag
+from leapp.tags import DownloadPhaseTag, IPUWorkflowTag
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 from leapp.libraries.common.backup import backup_file, CLSQL_BACKUP_FILES
 
@@ -13,7 +13,7 @@ class BackupMySqlData(Actor):
     name = 'backup_my_sql_data'
     consumes = ()
     produces = ()
-    tags = (InterimPreparationPhaseTag.Before, IPUWorkflowTag)
+    tags = (DownloadPhaseTag.Before, IPUWorkflowTag)
 
     @run_on_cloudlinux
     def process(self):
