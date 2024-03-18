@@ -1,5 +1,5 @@
 from leapp.actors import Actor
-from leapp.tags import PreparationPhaseTag, IPUWorkflowTag
+from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 
 import os
@@ -12,8 +12,8 @@ class UnsetClnCacheOnlyFlag(Actor):
     name = 'unset_cln_cache_only_flag'
     consumes = ()
     produces = ()
-    tags = (IPUWorkflowTag, PreparationPhaseTag)
+    tags = (IPUWorkflowTag, FirstBootPhaseTag)
 
     @run_on_cloudlinux
     def process(self):
-        os.remove('/var/lib/leapp/el8userspace/etc/cln_leapp_in_progress', 'w')
+        os.remove('/var/lib/leapp/el8userspace/etc/cln_leapp_in_progress')
