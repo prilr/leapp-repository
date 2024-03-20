@@ -16,4 +16,7 @@ class UnsetClnCacheOnlyFlag(Actor):
 
     @run_on_cloudlinux
     def process(self):
-        os.remove('/var/lib/leapp/el8userspace/etc/cln_leapp_in_progress')
+        try:
+            os.remove('/var/lib/leapp/el8userspace/etc/cln_leapp_in_progress')
+        except FileNotFoundError:
+            self.log.info('CLN cache file marker does not exist, doing nothing.')
