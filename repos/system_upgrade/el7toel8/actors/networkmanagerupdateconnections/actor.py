@@ -2,6 +2,7 @@ from leapp.actors import Actor
 from leapp.libraries.stdlib import CalledProcessError, run
 from leapp.models import NetworkManagerConfig
 from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
+from leapp.reporting import Report
 from leapp import reporting
 
 
@@ -17,7 +18,7 @@ class NetworkManagerUpdateConnections(Actor):
 
     name = 'network_manager_update_connections'
     consumes = (NetworkManagerConfig,)
-    produces = ()
+    produces = (Report,)
     tags = (FirstBootPhaseTag, IPUWorkflowTag)
 
     def process(self):
