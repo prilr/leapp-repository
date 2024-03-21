@@ -1,4 +1,5 @@
 import os
+import copy
 
 from leapp.models import (
     InstalledMySqlTypes,
@@ -21,6 +22,7 @@ from leapp.libraries.common.cl_repofileutils import (
     LEAPP_COPY_SUFFIX,
     REPOFILE_SUFFIX,
 )
+from leapp.models import RepositoryFile
 
 CL_MARKERS = ["cl-mysql", "cl-mariadb", "cl-percona"]
 MARIA_MARKERS = ["MariaDB"]
@@ -94,18 +96,27 @@ class MySqlRepositorySetupLibrary(object):
         """
         Process CL-provided MySQL options.
         """
+        self.clmysql_type = get_clmysql_type()
+        if not self.clmysql_type:
+            api.current_logger().warning("CL-MySQL type detection failed, skipping repository mapping")
+            return
+        api.current_logger().debug("Detected CL-MySQL type: {}".format(self.clmysql_type))
+
         data_to_log = [
             (repo_data.repoid, "enabled" if repo_data.enabled else "disabled") for repo_data in repofile_data.data
         ]
 
         api.current_logger().debug("repoids from CloudLinux repofile {}: {}".format(repofile_name, data_to_log))
 
+        cl8_repofile_list = []
+
         # Were any repositories enabled?
         for source_repo in repofile_data.data:
             # cl-mysql URLs look like this:
             # baseurl=http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.3/$basearch/
-            # We don't want any duplicate repoid entries.
-            target_repo = source_repo
+            # We don't want any duplicate repoid entries - they'd cause yum/dnf to fail.
+            # Make everything unique by adding -8 to the repoid.
+            target_repo = copy.deepcopy(source_repo)
             target_repo.repoid = target_repo.repoid + "-8"
             # releasever may be something like 8.6, while only 8 is acceptable.
             target_repo.baseurl = target_repo.baseurl.replace("/cl$releasever/", "/cl8/")
@@ -137,7 +148,6 @@ class MySqlRepositorySetupLibrary(object):
             # However, it should be enabled for the Leapp upgrade, seeing as some packages
             # from it won't update otherwise.
             if target_repo.enabled or target_repo.repoid == "mysqclient-8":
-                self.clmysql_type = get_clmysql_type()
                 api.current_logger().debug("Generating custom cl-mysql repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
@@ -150,10 +160,15 @@ class MySqlRepositorySetupLibrary(object):
                 self.mapping_msgs.append(
                     construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
+                # Gather the enabled repositories for the new repofile.
+                # They'll be used to create a new custom repofile for the target userspace.
+                cl8_repofile_list.append(target_repo)
 
         if any(repo.enabled for repo in repofile_data.data):
             self.mysql_types.add("cloudlinux")
-            leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
+            # Provide the object with the modified repository data to the target userspace.
+            cl8_repofile_data = RepositoryFile(data=cl8_repofile_list, file=repofile_data.file)
+            leapp_repocopy = create_leapp_repofile_copy(cl8_repofile_data, repofile_name)
             api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
         else:
             api.current_logger().debug("No repos from CloudLinux repofile {} enabled, ignoring".format(repofile_name))
@@ -170,7 +185,7 @@ class MySqlRepositorySetupLibrary(object):
             # baseurl = https://archive.mariadb.org/mariadb-10.3/yum/centos/7/x86_64
             # baseurl = https://archive.mariadb.org/mariadb-10.7/yum/centos7-ppc64/
             # We want to replace the 7 in OS name after /yum/
-            target_repo = source_repo
+            target_repo = copy.deepcopy(source_repo)
             target_repo.repoid = target_repo.repoid + "-8"
             url_parts = target_repo.baseurl.split("yum")
             url_parts[1] = "yum" + url_parts[1].replace("7", "8")
@@ -210,7 +225,7 @@ class MySqlRepositorySetupLibrary(object):
             # URLs look like this:
             # baseurl = https://repo.mysql.com/yum/mysql-8.0-community/el/7/x86_64/
             # Remember that we always want to modify names, to avoid "duplicate repository" errors.
-            target_repo = source_repo
+            target_repo = copy.deepcopy(source_repo)
             target_repo.repoid = target_repo.repoid + "-8"
             target_repo.baseurl = target_repo.baseurl.replace("/el/7/", "/el/8/")
 
