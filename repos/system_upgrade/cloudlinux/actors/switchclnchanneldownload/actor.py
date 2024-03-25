@@ -1,33 +1,27 @@
 from leapp.actors import Actor
 from leapp.libraries.stdlib import api
 from leapp.tags import DownloadPhaseTag, IPUWorkflowTag
-from leapp.libraries.stdlib import CalledProcessError, run
+from leapp.libraries.stdlib import CalledProcessError
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
+from leapp.libraries.common.cln_switch import cln_switch
 from leapp import reporting
 from leapp.reporting import Report
 
 
-class SwitchClnChannel(Actor):
+class SwitchClnChannelDownload(Actor):
     """
     Switch CLN channel from 7 to 8 to be able to download upgrade packages.
     """
 
-    name = "switch_cln_channel"
+    name = "switch_cln_channel_download"
     consumes = ()
     produces = (Report,)
     tags = (IPUWorkflowTag, DownloadPhaseTag.Before)
 
-    switch_bin = "/usr/sbin/cln-switch-channel"
-
     @run_on_cloudlinux
     def process(self):
-        switch_cmd = [self.switch_bin, "-t", "8", "-o", "-f"]
-        yum_clean_cmd = ["yum", "clean", "all"]
         try:
-            res = run(switch_cmd)
-            self.log.debug('Command "%s" result: %s', switch_cmd, res)
-            res = run(yum_clean_cmd)  # required to update the repolist
-            self.log.debug('Command "%s" result: %s', yum_clean_cmd, res)
+            cln_switch(target=8)
         except CalledProcessError as e:
             reporting.create_report(
                 [

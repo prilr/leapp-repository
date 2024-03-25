@@ -7,6 +7,7 @@ from leapp.libraries.actor import constants
 from leapp.libraries.common import dnfplugin, mounting, overlaygen, repofileutils, rhsm, rhui, utils
 from leapp.libraries.common.config import get_env, get_product_type
 from leapp.libraries.common.config.version import get_target_major_version
+from leapp.libraries.common.cln_switch import cln_switch
 from leapp.libraries.stdlib import api, CalledProcessError, config, run
 from leapp.models import RequiredTargetUserspacePackages  # deprecated
 from leapp.models import TMPTargetRepositoriesFacts  # deprecated
@@ -210,23 +211,16 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
 
         api.current_logger().debug('Checking the CLN registration status')
         context.call(['rhn_check'], callback_raw=utils.logging_handler)
-        switch_bin = "/usr/sbin/cln-switch-channel"
-        switch_cmd = [switch_bin, "-t", "8", "-o", "-f"]
-        context.call(switch_cmd, callback_raw=utils.logging_handler)
+        # To get packages from Spacewalk repos (aka CLN) we need to switch the CLN channel.
 
-        reporting.create_report([
-            reporting.Title('CLN channel switched to CL8.'),
-            reporting.Summary(
-                'The CLN channel for this system has been switched from CL7 to CL8.'
-                'This is required to pull the correct packages for the upgrade.'
-                'However, if the upgrade stops at a later stage, you may want to switch back to the original channel.'
-            ),
-            reporting.Tags([reporting.Tags.UPGRADE_PROCESS, reporting.Tags.AUTHENTICATION]),
-            reporting.Severity(reporting.Severity.MEDIUM),
-            reporting.Remediation(hint=(
-                'Set the channel back to CL7 using the command: cln-switch-channel -t 7 -o -f'
-            )),
-        ])
+        # Note that this switches the channel for the entire host system, not just the target userspace -
+        # so if we don't reset it back to the original channel, the host system will be left in an inconsistent state.
+
+        # The 'switch_cln_channel_reset' actor should reset the channel back to the original state after the
+        # transaction check phase is done - so the preupgrade checks won't affect the host system.
+        # The 'switch_cln_channel_download' actor should take care of switching the channel back to the CL8 channel
+        # when it's time to download the upgrade packages.
+        cln_switch(target=8)
 
 
 def _get_all_rhui_pkgs():
