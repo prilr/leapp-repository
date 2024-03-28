@@ -94,6 +94,24 @@ class ClearPackageConflicts(Actor):
         if self.problem_packages_installed(problem_packages):
             self.clear_problem_files(problem_files, problem_dirs)
 
+    def lua_cjson_handle(self):
+        """
+        lua-cjson package is conflicting with the incoming lua-cjson package for EL8.
+        """
+        problem_packages = [
+            "lua-cjson"
+        ]
+        problem_files = [
+            "/usr/lib64/lua/5.1/cjson.so",
+            "/usr/share/lua/5.1/cjson/tests/bench.lua",
+            "/usr/share/lua/5.1/cjson/tests/genutf8.pl",
+            "/usr/share/lua/5.1/cjson/tests/test.lua",
+        ]
+        problem_dirs = []
+
+        if self.problem_packages_installed(problem_packages):
+            self.clear_problem_files(problem_files, problem_dirs)
+
     @run_on_cloudlinux
     def process(self):
         self.rpm_lookup = {rpm for rpm in self.consume(InstalledRPM)}
