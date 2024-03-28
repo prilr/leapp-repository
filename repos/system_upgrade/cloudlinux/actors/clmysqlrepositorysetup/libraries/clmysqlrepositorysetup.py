@@ -179,6 +179,7 @@ class MySqlRepositorySetupLibrary(object):
 
         Versions of MariaDB installed from https://mariadb.org/.
         """
+        cl8_repofile_list = []
 
         for source_repo in repofile_data.data:
             # Maria URLs look like this:
@@ -204,12 +205,14 @@ class MySqlRepositorySetupLibrary(object):
                 self.mapping_msgs.append(
                     construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
+                cl8_repofile_list.append(target_repo)
 
         if any(repo.enabled for repo in repofile_data.data):
             # Since MariaDB URLs have major versions written in, we need a new repo file
             # to feed to the target userspace.
             self.mysql_types.add("mariadb")
-            leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
+            cl8_repofile_data = RepositoryFile(data=cl8_repofile_list, file=repofile_data.file)
+            leapp_repocopy = create_leapp_repofile_copy(cl8_repofile_data, repofile_name)
             api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
         else:
             api.current_logger().debug("No repos from MariaDB repofile {} enabled, ignoring".format(repofile_name))
@@ -220,6 +223,7 @@ class MySqlRepositorySetupLibrary(object):
 
         Versions of MySQL installed from https://mysql.com/.
         """
+        cl8_repofile_list = []
 
         for source_repo in repofile_data.data:
             # URLs look like this:
@@ -269,12 +273,14 @@ class MySqlRepositorySetupLibrary(object):
                 self.mapping_msgs.append(
                     construct_repomap_data(source_repo.repoid, target_repo.repoid)
                 )
+                cl8_repofile_list.append(target_repo)
 
         if any(repo.enabled for repo in repofile_data.data):
             # MySQL typically has multiple repo files, so we want to make sure we're
             # adding the type to list only once.
             self.mysql_types.add("mysql")
-            leapp_repocopy = create_leapp_repofile_copy(repofile_data, repofile_name)
+            cl8_repofile_data = RepositoryFile(data=cl8_repofile_list, file=repofile_data.file)
+            leapp_repocopy = create_leapp_repofile_copy(cl8_repofile_data, repofile_name)
             api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
         else:
             api.current_logger().debug("No repos from MySQL repofile {} enabled, ignoring".format(repofile_name))
