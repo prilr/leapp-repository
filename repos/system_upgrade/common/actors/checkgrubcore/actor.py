@@ -45,11 +45,16 @@ class CheckGrubCore(Actor):
                 create_report([
                     reporting.Title('Leapp could not identify where GRUB core is located'),
                     reporting.Summary(
-                        'We assume GRUB core is located on the same device as /boot. Leapp needs to '
-                        'update GRUB core as it is not done automatically on legacy (BIOS) systems. '
+                        'We assumed GRUB2 core is located on the same device(s) as /boot, '
+                        'however Leapp could not detect GRUB2 on those device(s). '
+                        'This means GRUB2 core will not be updated during the upgrade process and '
+                        'the system will probably ' 'boot into the old kernel after the upgrade. '
+                        'GRUB2 core needs to be updated manually on legacy (BIOS) systems to '
+                        'fix this.'
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
                     reporting.Tags([reporting.Tags.BOOT]),
                     reporting.Remediation(
-                        hint='Please run "grub2-install <GRUB_DEVICE> command manually after upgrade'),
+                        hint='Please run the "grub2-install <GRUB_DEVICE>" command manually '
+                        'after the upgrade'),
                 ])
