@@ -360,7 +360,7 @@ def perform_transaction_install(target_userspace_info, storage_info, used_repos,
 
 
 @contextlib.contextmanager
-def _prepare_perform(used_repos, target_userspace_info, xfs_info, storage_info, target_iso=None):
+def _prepare_perform(used_repos, target_userspace_info, xfs_info, storage_info):
     reserve_space = overlaygen.get_recommended_leapp_free_space(target_userspace_info.path)
     with _prepare_transaction(used_repos=used_repos,
                               target_userspace_info=target_userspace_info
@@ -369,8 +369,7 @@ def _prepare_perform(used_repos, target_userspace_info, xfs_info, storage_info, 
                                               xfs_info=xfs_info, storage_info=storage_info,
                                               mount_target=os.path.join(context.base_dir, 'installroot'),
                                               scratch_reserve=reserve_space) as overlay:
-            with mounting.mount_upgrade_iso_to_root_dir(target_userspace_info.path, target_iso):
-                yield context, overlay, target_repoids
+            yield context, overlay, target_repoids
 
 
 def perform_transaction_check(target_userspace_info, used_repos, tasks, xfs_info, storage_info, plugin_info):
