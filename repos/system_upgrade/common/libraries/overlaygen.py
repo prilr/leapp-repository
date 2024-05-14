@@ -705,7 +705,7 @@ def _prepare_required_mounts_old(scratch_dir, mounts_dir, mount_points, xfs_info
     # Ensure we cleanup old disk images before we check for space contraints.
     run(['rm', '-rf', disk_images_directory])
     _create_diskimages_dir(scratch_dir, disk_images_directory)
-    _ensure_enough_diskimage_space(space_needed, scratch_dir, xfs_noftype_mounts)
+    _ensure_enough_diskimage_space_old(space_needed, scratch_dir, xfs_noftype_mounts)
 
     mount_names = [mount_point.fs_file for mount_point in mount_points]
 
