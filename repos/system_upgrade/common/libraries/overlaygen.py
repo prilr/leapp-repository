@@ -699,12 +699,12 @@ def _prepare_required_mounts_old(scratch_dir, mounts_dir, mount_points, xfs_info
         return result
 
     xfs_noftype_mounts = len(xfs_info.mountpoints_without_ftype)
-    space_needed = _overlay_disk_size() * xfs_noftype_mounts
+    space_needed = _overlay_disk_size_old() * xfs_noftype_mounts
     disk_images_directory = os.path.join(scratch_dir, 'diskimages')
 
     # Ensure we cleanup old disk images before we check for space contraints.
     run(['rm', '-rf', disk_images_directory])
-    _create_diskimages_dir(scratch_dir, disk_images_directory)
+    _create_diskimages_dir_old(scratch_dir, disk_images_directory)
     _ensure_enough_diskimage_space_old(space_needed, scratch_dir, xfs_noftype_mounts)
 
     mount_names = [mount_point.fs_file for mount_point in mount_points]
