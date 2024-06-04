@@ -9,6 +9,7 @@ from leapp.libraries.common.detectcontrolpanel import (
     INTEGRATED_NAME,
     CPANEL_NAME,
     DIRECTADMIN_NAME,
+    PLESK_NAME,
 )
 
 required_memory = {
@@ -16,6 +17,7 @@ required_memory = {
     UNKNOWN_NAME: 1536 * 1024,  # 1.5 Gb
     INTEGRATED_NAME: 1536 * 1024,  # 1.5 Gb
     DIRECTADMIN_NAME: 1536 * 1024,  # 1.5 Gb
+    PLESK_NAME: 1536 * 1024,  # 1.5 Gb
     CPANEL_NAME: 1836 * 1024,  # 1.8 Gb
 }
 

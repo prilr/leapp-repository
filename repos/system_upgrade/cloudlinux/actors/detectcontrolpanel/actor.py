@@ -11,7 +11,8 @@ from leapp.libraries.common.detectcontrolpanel import (
     UNKNOWN_NAME,
     INTEGRATED_NAME,
     CPANEL_NAME,
-    DIRECTADMIN_NAME
+    DIRECTADMIN_NAME,
+    PLESK_NAME
 )
 
 
@@ -31,7 +32,7 @@ class DetectControlPanel(Actor):
         if panel is None:
             raise StopActorExecutionError(message=("Missing information about the installed web panel."))
 
-        if panel.name in (CPANEL_NAME, DIRECTADMIN_NAME):
+        if panel.name in (CPANEL_NAME, DIRECTADMIN_NAME, PLESK_NAME):
             self.log.debug('%s detected, upgrade proceeding' % panel.name)
         elif panel.name == INTEGRATED_NAME or panel.name == UNKNOWN_NAME or panel.name == NOPANEL_NAME:
             self.log.debug('Integrated/no panel detected, upgrade proceeding')
