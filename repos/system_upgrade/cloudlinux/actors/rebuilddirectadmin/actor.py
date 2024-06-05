@@ -28,6 +28,7 @@ class UpdateDirectAdmin(Actor):
 
         if panel.name != DIRECTADMIN_NAME:
             self.log.debug('DirectAdmin not detected, skip rebuilding')
+            return
 
         try:
             run(['/bin/da', 'build', 'all'], checked=True)
