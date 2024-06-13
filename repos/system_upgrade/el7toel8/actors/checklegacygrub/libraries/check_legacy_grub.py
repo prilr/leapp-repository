@@ -28,7 +28,13 @@ def has_legacy_grub(device):
 
 def check_grub_disks_for_legacy_grub():
     # Both GRUB2 and Grub Legacy are recognized by `get_grub_devices`
-    grub_devices = grub_lib.get_grub_devices()
+    # oshyshatskyi: newer versions of leapp support multiple grub devices e.g. for raid
+    # because our version does not support that, we always check only one device
+    # https://github.com/oamg/leapp-repository/commit/2ba44076625e35aabfd2a1f9e45b2934f99f1e8d
+    grub_device = grub_lib.get_grub_device()
+    grub_devices = []
+    if grub_device:
+        grub_devices.append(grub_device)
 
     legacy_grub_devices = []
     for device in grub_devices:

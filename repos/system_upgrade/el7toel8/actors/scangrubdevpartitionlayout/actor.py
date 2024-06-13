@@ -10,7 +10,7 @@ class ScanGRUBDevicePartitionLayout(Actor):
     """
 
     name = 'scan_grub_device_partition_layout'
-    consumes = (GrubInfo,)
+    consumes = ()
     produces = (GRUBDevicePartitionLayout,)
     tags = (FactsPhaseTag, IPUWorkflowTag,)
 
