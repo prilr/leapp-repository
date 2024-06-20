@@ -44,7 +44,9 @@ def check_first_partition_offset():
             'We recommend to perform a fresh installation of the RHEL 8 system '
             'instead of performing the in-place upgrade.\n'
             'Another possibility is to reformat the devices so that there is '
-            'at least {0} kiB space before the first partition. '
+            'at least {0} kiB space before the first partition. If reformatting the drive is not possible, '
+            'consider migrating your /boot folder and grub2 configuration to another drive '
+            '(refer to https://cloudlinux.zendesk.com/hc/en-us/articles/14549594244508)'
             'Note that this operation is not supported and does not have to be '
             'always possible.'
         )
