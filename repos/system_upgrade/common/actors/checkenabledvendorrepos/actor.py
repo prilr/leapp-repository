@@ -21,13 +21,19 @@ class CheckEnabledVendorRepos(Actor):
     tags = (IPUWorkflowTag, FactsPhaseTag.Before)
 
     def process(self):
-        vendor_mapping_data = {}
+        repoid_to_vendorname = {}
         active_vendors = set()
+
+        # Permanently active vendors - no matter if their repos are present.
+        always_active_vendors = [
+            "epel"
+        ]
+        active_vendors.update(always_active_vendors)
 
         # Make a dict for easy mapping of repoid -> corresponding vendor name.
         for vendor_src_repodata in api.consume(VendorSourceRepos):
-            for vendor_src_repo in vendor_src_repodata.source_repoids:
-                vendor_mapping_data[vendor_src_repo] = vendor_src_repodata.vendor
+            for vendor_src_repoid in vendor_src_repodata.source_repoids:
+                repoid_to_vendorname[vendor_src_repoid] = vendor_src_repodata.vendor
 
         # Is the repo listed in the vendor map as from_repoid present on the system?
         for repos_facts in api.consume(RepositoriesFacts):
@@ -36,9 +42,9 @@ class CheckEnabledVendorRepos(Actor):
                     self.log.debug(
                         "Looking for repository {} in vendor maps".format(repo_data.repoid)
                     )
-                    if repo_data.enabled and repo_data.repoid in vendor_mapping_data:
+                    if repo_data.enabled and repo_data.repoid in repoid_to_vendorname:
                         # If the vendor's repository is present in the system and enabled, count the vendor as active.
-                        new_vendor = vendor_mapping_data[repo_data.repoid]
+                        new_vendor = repoid_to_vendorname[repo_data.repoid]
                         self.log.debug(
                             "Repository {} found and enabled, enabling vendor {}".format(
                                 repo_data.repoid, new_vendor
