@@ -16,6 +16,7 @@ VENDOR_SIGS = {
                'a963bbdbf533f4fa',
                '6c7cb6ef305d49d6'],
     'cloudlinux': ['8c55a6628608cb71'],
+    'fedora': ['6a2faea2352c64e5'],
     'almalinux': ['51d6647ec21ad6ea',
                   'd36cb86cb86b3716'],
     'rocky': ['15af5dac6d745a60',
