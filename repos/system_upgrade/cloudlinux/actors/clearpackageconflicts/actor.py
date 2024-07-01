@@ -77,23 +77,6 @@ class ClearPackageConflicts(Actor):
         if self.problem_packages_installed(problem_packages):
             self.clear_problem_files(problem_files, problem_dirs)
 
-    def openssl_handle(self):
-        """
-        openssl11-libs package from the EPEL repo is conflicting with the incoming openssl-libs package for EL8.
-        https://access.redhat.com/solutions/6986997
-        """
-        problem_packages = [
-            "openssl11-libs"
-        ]
-        problem_files = [
-            "/usr/lib64/.libcrypto.so.1.1.1k.hmac",
-            "/usr/lib64/.libssl.so.1.1.1k.hmac"
-        ]
-        problem_dirs = []
-
-        if self.problem_packages_installed(problem_packages):
-            self.clear_problem_files(problem_files, problem_dirs)
-
     def lua_cjson_handle(self):
         """
         lua-cjson package is conflicting with the incoming lua-cjson package for EL8.
@@ -116,4 +99,3 @@ class ClearPackageConflicts(Actor):
     def process(self):
         self.rpm_lookup = {rpm for rpm in self.consume(InstalledRPM)}
         self.alt_python37_handle()
-        self.openssl_handle()
