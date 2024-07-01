@@ -56,5 +56,9 @@ class PesEventsScanner(Actor):
             vendor_pesfiles = list(filter(lambda vfile: pes_json_suffix in vfile, os.listdir(VENDORS_DIR)))
 
             for pesfile in vendor_pesfiles:
+                self.log.debug("Scanning vendor PES file: {}".format(pesfile))
                 if pesfile[:-len(pes_json_suffix)] in active_vendors:
+                    self.log.debug("Vendor active, loading vendor PES file: {}".format(pesfile))
                     pes_events_scanner(VENDORS_DIR, pesfile)
+                else:
+                    self.log.debug("Vendor inactive, ignoring vendor PES file: {}".format(pesfile))
