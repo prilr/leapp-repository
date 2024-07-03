@@ -1,0 +1,2 @@
+* Wed May 29 2024 Roman Prilipskii <rprilipskii@cloudlinux.com> 0.16.0-9.cloudlinux
+- CLOS-2631: Improve algorithm of overlayfs creation and disk space estimation
