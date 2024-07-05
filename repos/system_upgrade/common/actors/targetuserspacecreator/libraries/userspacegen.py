@@ -299,6 +299,13 @@ def _prep_repository_access(context, target_userspace):
         with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'w') as f:
             f.writelines(new_lines)
 
+    if os.path.isfile('/etc/mirrorlist'):
+        try:
+            os.remove(os.path.join(target_etc, 'mirrorlist'))
+        except OSError:
+            pass
+        context.copy_from('/etc/mirrorlist', os.path.join(target_etc, 'mirrorlist'))
+
     # NOTE: we cannot just remove the original target yum.repos.d dir
     # as e.g. in case of RHUI a special RHUI repofiles are installed by a pkg
     # when the target userspace container is created. Removing these files we loose
