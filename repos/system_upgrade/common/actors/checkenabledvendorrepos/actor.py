@@ -24,6 +24,12 @@ class CheckEnabledVendorRepos(Actor):
         vendor_mapping_data = {}
         active_vendors = set()
 
+        # Permanently active vendors - no matter if their repos are present.
+        always_active_vendors = [
+            "epel"
+        ]
+        active_vendors.update(always_active_vendors)
+
         # Make a dict for easy mapping of repoid -> corresponding vendor name.
         for vendor_src_repodata in api.consume(VendorSourceRepos):
             for vendor_src_repo in vendor_src_repodata.source_repoids:

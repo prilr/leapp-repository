@@ -17,18 +17,27 @@ def process():
     """
     if not os.path.isfile(CUSTOM_REPO_PATH):
         api.current_logger().debug(
-                "The {} file doesn't exist. Nothing to do."
-                .format(CUSTOM_REPO_PATH))
+            "The {} file doesn't exist. Nothing to do.".format(CUSTOM_REPO_PATH)
+        )
         return
-    api.current_logger().info("The {} file exists.".format(CUSTOM_REPO_PATH))
+
     repofile = repofileutils.parse_repofile(CUSTOM_REPO_PATH)
     if not repofile.data:
+        api.current_logger().info(
+            "The {} file exists, but is empty. Nothing to do.".format(CUSTOM_REPO_PATH)
+        )
         return
     api.produce(CustomTargetRepositoryFile(file=CUSTOM_REPO_PATH))
+
     for repo in repofile.data:
-        api.produce(CustomTargetRepository(
-            repoid=repo.repoid,
-            name=repo.name,
-            baseurl=repo.baseurl,
-            enabled=repo.enabled,
-        ))
+        api.produce(
+            CustomTargetRepository(
+                repoid=repo.repoid,
+                name=repo.name,
+                baseurl=repo.baseurl,
+                enabled=repo.enabled,
+            )
+        )
+    api.current_logger().info(
+        "The {} file exists, custom repositories loaded.".format(CUSTOM_REPO_PATH)
+    )

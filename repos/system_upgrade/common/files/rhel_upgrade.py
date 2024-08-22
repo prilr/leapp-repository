@@ -125,11 +125,16 @@ class RhelUpgradeCommand(dnf.cli.Command):
             self.base.conf.tsflags.append("test")
 
         enabled_repos = self.plugin_data['dnf_conf']['enable_repos']
+        print("All DNF repos: {}".format(self.base.repos.all()))
         self.base.repos.all().disable()
 
         aws_region = None
 
         for repo in self.base.repos.all():
+            # we always want to have CLN repos enabled
+            if type(repo).__name__ == "SpacewalkRepo":
+                repo.enable()
+
             if repo.id in enabled_repos:
                 repo.skip_if_unavailable = False
                 if not self.base.conf.gpgcheck:

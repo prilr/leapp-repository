@@ -101,7 +101,7 @@ def read_or_fetch(filename,
                 data = f.read()
                 if not allow_empty and not data:
                     _raise_error(local_path, "File {lp} exists but is empty".format(lp=local_path))
-                logger.warning("File {lp} successfully read ({l} bytes)".format(lp=local_path, l=len(data)))
+                logger.debug("File {lp} successfully read ({l} bytes)".format(lp=local_path, l=len(data)))
                 return data
         except EnvironmentError:
             _raise_error(local_path, "File {lp} exists but couldn't be read".format(lp=local_path))

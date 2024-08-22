@@ -1,0 +1,9 @@
+* Thu Jul 04 2024 Roman Prilipskii <rprilipskii@cloudlinux.com> 0.16.0-10.cloudlinux
+- CLOS-2610: Add upgrade inhibitors for outdated GRUB and insufficient space in boot disk embedding area
+- CLOS-2670: Allow upgrades with the Plesk control panel
+- CLOS-2707: Allow upgrades with the DirectAdmin control panel and add DirectAdmin rebuild to the post-elevation steps if it's installed
+- CLOS-2759: Fix 'Cache-only enabled but no cache' errors for CLN repositories
+- Add a built-in signature for Fedora EPEL packages
+
+* Wed May 29 2024 Roman Prilipskii <rprilipskii@cloudlinux.com> 0.16.0-9.cloudlinux
+- CLOS-2631: Improve algorithm of overlayfs creation and disk space estimation

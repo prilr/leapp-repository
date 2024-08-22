@@ -29,13 +29,18 @@ def check_os_version():
         for rel in version.SUPPORTED_VERSIONS:
             for ver in version.SUPPORTED_VERSIONS[rel]:
                 supported_releases.append(rel.upper() + ' ' + ver)
+
+        installed_release, installed_version = version.current_version()
+        installed_str = installed_release.upper() + ' ' + installed_version
+
         reporting.create_report([
             reporting.Title(
                 'The installed OS version is not supported for the in-place upgrade to the target RHEL version'
             ),
             reporting.Summary(
+                'Installed OS release: {}\n'
                 'The supported OS releases for the upgrade process:\n'
-                ' {}'.format('\n'.join(supported_releases))
+                ' {}'.format(installed_str, '\n'.join(supported_releases))
             ),
             reporting.Severity(reporting.Severity.HIGH),
             reporting.Groups(COMMON_REPORT_TAGS),

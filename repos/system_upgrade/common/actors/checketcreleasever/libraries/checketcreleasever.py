@@ -5,10 +5,10 @@ from leapp.models import PkgManagerInfo, RHUIInfo
 
 def handle_etc_releasever():
 
-    target_version = api.current_actor().configuration.version.target
+    target_version = get_target_major_version()
     reporting.create_report([
         reporting.Title(
-            'Release version in /etc/dnf/vars/releasever will be set to the current target release'
+            'Release version in /etc/dnf/vars/releasever will be set to the major target release'
         ),
         reporting.Summary(
             'On this system, Leapp detected "releasever" variable is either configured through DNF/YUM configuration '

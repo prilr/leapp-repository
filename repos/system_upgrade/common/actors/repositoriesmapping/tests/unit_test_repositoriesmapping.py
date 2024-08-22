@@ -14,7 +14,6 @@ from leapp.models import ConsumedDataAsset, PESIDRepositoryEntry, RPM
 
 CUR_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
 @pytest.fixture
 def adjust_cwd():
     previous_cwd = os.getcwd()

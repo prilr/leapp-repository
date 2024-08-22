@@ -4,7 +4,20 @@ import sys
 
 import gi
 
-gi.require_version('NM', '1.0')
+try:
+    gi.require_version("NM", "1.0")
+except ValueError:
+    # If we're missing NetworkManager-libnm, the script won't function.
+    print(
+        "PyGObject bindings for NetworkManager not found - do you have NetworkManager-libnm installed?"
+    )
+    print(
+        "If you have dhcp=dhclient, you may need to convert your string-formatted client IDs to hexadecimal"
+        "to preserve the format they're sent on the wire with. Otherwise, they will now have a zero byte"
+        "prepended while being sent."
+    )
+    sys.exit(79)
+
 from gi.repository import NM  # noqa: E402; pylint: disable=wrong-import-position
 
 
@@ -23,7 +36,7 @@ def is_hexstring(s):
 client = NM.Client.new(None)
 if not client:
     print('Cannot create NM client instance')
-    sys.exit(0)
+    sys.exit(79)
 
 processed = 0
 changed = 0

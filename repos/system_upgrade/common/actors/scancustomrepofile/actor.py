@@ -1,6 +1,9 @@
 from leapp.actors import Actor
 from leapp.libraries.actor import scancustomrepofile
-from leapp.models import CustomTargetRepository, CustomTargetRepositoryFile
+from leapp.models import (
+    CustomTargetRepository,
+    CustomTargetRepositoryFile,
+)
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
 
 
@@ -18,7 +21,7 @@ class ScanCustomRepofile(Actor):
     If the file doesn't exist, nothing happens.
     """
 
-    name = 'scan_custom_repofile'
+    name = "scan_custom_repofile"
     consumes = ()
     produces = (CustomTargetRepository, CustomTargetRepositoryFile)
     tags = (FactsPhaseTag, IPUWorkflowTag)

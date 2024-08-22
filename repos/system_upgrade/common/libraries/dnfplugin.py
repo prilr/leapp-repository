@@ -5,6 +5,8 @@ import os
 import re
 import shutil
 
+import six
+
 from leapp.exceptions import StopActorExecutionError
 from leapp.libraries.common import dnfconfig, guards, mounting, overlaygen, rhsm, utils
 from leapp.libraries.common.config import get_env
@@ -62,6 +64,7 @@ def install(target_basedir):
         shutil.copy2(
             api.get_file_path(DNF_PLUGIN_NAME),
             os.path.join(target_basedir, DNF_PLUGIN_PATH.lstrip('/')))
+        api.current_logger().debug('Installing DNF plugin to {}'.format(DNF_PLUGIN_PATH))
     except EnvironmentError as e:
         api.current_logger().debug('Failed to install DNF plugin', exc_info=True)
         raise StopActorExecutionError(
@@ -310,8 +313,18 @@ def _transaction(context, stage, target_repoids, tasks, plugin_info, xfs_info,
                 message='Failed to execute dnf. Reason: {}'.format(str(e))
             )
         except CalledProcessError as e:
-            api.current_logger().error('Cannot calculate, check, test, or perform the upgrade transaction.')
-            _handle_transaction_err_msg(stage, xfs_info, e, is_container=False)
+            err_stdout = e.stdout
+            err_stderr = e.stderr
+            if six.PY2:
+                err_stdout = e.stdout.encode('utf-8', 'xmlcharrefreplace')
+                err_stderr = e.stderr.encode('utf-8', 'xmlcharrefreplace')
+
+            api.current_logger().error('DNF execution failed: ')
+            raise StopActorExecutionError(
+                message='DNF execution failed with non zero exit code.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}'.format(
+                    stdout=err_stdout, stderr=err_stderr
+                )
+            )
         finally:
             if stage == 'check':
                 backup_debug_data(context=context)
@@ -488,6 +501,7 @@ def perform_transaction_check(target_userspace_info,
 
     with _prepare_perform(used_repos=used_repos, target_userspace_info=target_userspace_info, xfs_info=xfs_info,
                           storage_info=storage_info, target_iso=target_iso) as (context, overlay, target_repoids):
+        api.current_logger().debug('DNF plugin target repoids: {}'.format(target_repoids))
         apply_workarounds(overlay.nspawn())
 
         disable_plugins = []

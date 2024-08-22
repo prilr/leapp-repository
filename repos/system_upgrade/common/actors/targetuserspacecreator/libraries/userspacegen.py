@@ -10,6 +10,7 @@ from leapp.libraries.common import dnfplugin, mounting, overlaygen, repofileutil
 from leapp.libraries.common.config import get_env, get_product_type
 from leapp.libraries.common.config.version import get_target_major_version
 from leapp.libraries.common.gpg import get_path_to_gpg_certs, is_nogpgcheck_set
+from leapp.libraries.common.cln_switch import cln_switch
 from leapp.libraries.stdlib import api, CalledProcessError, config, run
 from leapp.models import RequiredTargetUserspacePackages  # deprecated
 from leapp.models import TMPTargetRepositoriesFacts  # deprecated all the time
@@ -213,6 +214,35 @@ def _handle_transaction_err_msg_size(err):
     raise StopActorExecutionError(message=message, details=details)
 
 
+def enable_spacewalk_module(context):
+    enabled_repos = ["cloudlinux8-baseos"]
+    target_major_version = get_target_major_version()
+    repos_opt = [['--enablerepo', repo] for repo in enabled_repos]
+    repos_opt = list(itertools.chain(*repos_opt))
+
+    api.current_logger().debug('Enabling module for target userspace: satellite-5-client')
+
+    cmd = ['dnf',
+            'module',
+            'enable',
+            'satellite-5-client',
+            '-y',
+            '--nogpgcheck',
+            '--setopt=module_platform_id=platform:el{}'.format(target_major_version),
+            '--setopt=keepcache=1',
+            '--releasever', api.current_actor().configuration.version.target,
+            '--installroot', '/el{}target'.format(target_major_version),
+            '--disablerepo', '*'
+            ] + repos_opt
+    try:
+        context.call(cmd, callback_raw=utils.logging_handler)
+    except CalledProcessError as exc:
+        raise StopActorExecutionError(
+            message='Unable to activate spacewalk module.',
+            details={'details': str(exc), 'stderr': exc.stderr}
+        )
+
+
 def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
     """
     Implement the creation of the target userspace.
@@ -229,8 +259,17 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         if not is_nogpgcheck_set():
             _import_gpg_keys(context, install_root_dir, target_major_version)
 
+        api.current_logger().debug('Installing cloudlinux-release')
+        context.call(['rpm', '--import', 'https://repo.cloudlinux.com/cloudlinux/security/RPM-GPG-KEY-CloudLinux'], callback_raw=utils.logging_handler)
+        context.call(['dnf', '-y', 'localinstall', 'https://repo.cloudlinux.com/cloudlinux/migrate/release-files/cloudlinux/8/x86_64/cloudlinux8-release-current.x86_64.rpm'], callback_raw=utils.logging_handler)
+
+        enable_spacewalk_module(context)
+
+        api.current_logger().debug('Installing packages into target userspace: {}'.format(packages))
+
         repos_opt = [['--enablerepo', repo] for repo in enabled_repos]
         repos_opt = list(itertools.chain(*repos_opt))
+
         cmd = ['dnf', 'install', '-y']
         if is_nogpgcheck_set():
             cmd.append('--nogpgcheck')
@@ -282,6 +321,19 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
                         )
 
             raise StopActorExecutionError(message=message, details=details)
+
+        api.current_logger().debug('Checking the CLN registration status')
+        context.call(['rhn_check'], callback_raw=utils.logging_handler)
+        # To get packages from Spacewalk repos (aka CLN) we need to switch the CLN channel.
+
+        # Note that this switches the channel for the entire host system, not just the target userspace -
+        # so if we don't reset it back to the original channel, the host system will be left in an inconsistent state.
+
+        # The 'switch_cln_channel_reset' actor should reset the channel back to the original state after the
+        # transaction check phase is done - so the preupgrade checks won't affect the host system.
+        # The 'switch_cln_channel_download' actor should take care of switching the channel back to the CL8 channel
+        # when it's time to download the upgrade packages.
+        cln_switch(target=8)
 
 
 def _query_rpm_for_pkg_files(context, pkgs):
@@ -634,6 +686,29 @@ def _prep_repository_access(context, target_userspace):
         run(['rm', '-rf', os.path.join(target_etc, 'rhsm')])
         context.copytree_from('/etc/rhsm', os.path.join(target_etc, 'rhsm'))
 
+    # Copy RHN data independent from RHSM config
+    if os.path.isdir('/etc/sysconfig/rhn'):
+        context.call(['/usr/sbin/rhn_check'], callback_raw=utils.logging_handler)
+        run(['rm', '-rf', os.path.join(target_etc, 'sysconfig/rhn')])
+        context.copytree_from('/etc/sysconfig/rhn', os.path.join(target_etc, 'sysconfig/rhn'))
+        # Set up spacewalk plugin config
+        with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'r') as f:
+            lines = f.readlines()
+            new_lines = []
+            for line in lines:
+                if 'enabled' in line:
+                    line = 'enabled = 1\n'
+                new_lines.append(line)
+        with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'w') as f:
+            f.writelines(new_lines)
+
+    if os.path.isfile('/etc/mirrorlist'):
+        try:
+            os.remove(os.path.join(target_etc, 'mirrorlist'))
+        except OSError:
+            pass
+        context.copy_from('/etc/mirrorlist', os.path.join(target_etc, 'mirrorlist'))
+
     # NOTE: We cannot just remove the target yum.repos.d dir and replace it with yum.repos.d from the scratch
     # #     that we've used to obtain the new DNF stack and install it into the target userspace. Although
     # #     RHUI clients are being installed in both scratch and target containers, users can request their package
@@ -783,6 +858,11 @@ def _inhibit_on_duplicate_repos(repofiles):
 
 def _get_all_available_repoids(context):
     repofiles = repofileutils.get_parsed_repofiles(context)
+
+    api.current_logger().debug("All available repositories inside the overlay FS:")
+    for repof in repofiles:
+        api.current_logger().debug("File: {}, repos: {}".format(repof.file, [repod.repoid for repod in repof.data]))
+
     # TODO: this is not good solution, but keep it as it is now
     # Issue: #486
     if rhsm.skip_rhsm():
@@ -1040,6 +1120,7 @@ def _install_custom_repofiles(context, custom_repofiles):
     """
     for rfile in custom_repofiles:
         _dst_path = os.path.join('/etc/yum.repos.d', os.path.basename(rfile.file))
+        api.current_logger().debug("Copying {} to {}".format(rfile.file, _dst_path))
         context.copy_to(rfile.file, _dst_path)
 
 

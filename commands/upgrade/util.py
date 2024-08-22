@@ -2,18 +2,25 @@ import functools
 import itertools
 import json
 import os
+import sys
 import shutil
 import tarfile
+import six.moves
 from datetime import datetime
+from contextlib import contextmanager
+import six
 
 from leapp.cli.commands import command_utils
 from leapp.cli.commands.config import get_config
-from leapp.exceptions import CommandError
+from leapp.exceptions import CommandError, LeappRuntimeError
 from leapp.repository.scan import find_and_scan_repositories
 from leapp.utils import audit
 from leapp.utils.audit import get_checkpoints, get_connection, get_messages
-from leapp.utils.output import report_unsupported
+from leapp.utils.output import report_unsupported, pretty_block_text, pretty_block, Color
 from leapp.utils.report import fetch_upgrade_report_messages, generate_report_file
+from leapp.models import ErrorModel
+
+
 
 
 def disable_database_sync():
@@ -167,6 +174,46 @@ def warn_if_unsupported(configuration):
         report_unsupported(devel_vars, configuration["whitelist_experimental"])
 
 
+def ask_to_continue():
+    """
+    Pause before starting the upgrade, warn the user about potential conseqences
+    and ask for confirmation.
+    Only done on whitelisted OS.
+
+    :return: True if it's OK to continue, False if the upgrade should be interrupted.
+    """
+
+    ask_on_os = ['cloudlinux']
+    os_id = command_utils.get_os_release_id('/etc/os-release')
+
+    if os_id not in ask_on_os:
+        return True
+
+    with pretty_block(
+        text="Upgrade workflow initiated",
+        end_text="Continue?",
+        target=sys.stdout,
+        color=Color.bold,
+    ):
+        warn_msg = (
+            "Past this point, Leapp will begin making changes to your system.\n"
+            "An improperly or incompletely configured upgrade may break the system, "
+            "up to and including making it *completely inaccessible*.\n"
+            "Even if you've followed all the preparation steps correctly, "
+            "the chance of the upgrade going wrong remains non-zero.\n"
+            "Make sure you've run the pre-check and checked the logs and reports.\n"
+            "Do you confirm that you've successfully taken and tested a full backup of your server?\n"
+            "Rollback will not be possible."
+        )
+        print(warn_msg)
+
+    response = ""
+    while response not in ["y", "n"]:
+        response = six.moves.input("Y/N> ").lower()
+
+    return response == "y"
+
+
 def handle_output_level(args):
     """
     Set environment variables following command line arguments.
@@ -247,3 +294,68 @@ def process_whitelist_experimental(repositories, workflow, configuration, logger
             if logger:
                 logger.error(msg)
             raise CommandError(msg)
+
+
+def process_report_schema(args, configuration):
+    default_report_schema = configuration.get('report', 'schema')
+    if args.report_schema and args.report_schema > default_report_schema:
+        raise CommandError('--report-schema version can not be greater that the '
+                           'actual {} one.'.format(default_report_schema))
+    return args.report_schema or default_report_schema
+
+
+# TODO: This and the following functions should eventually be placed into the
+# leapp.utils.output module.
+def pretty_block_log(string, logger_level, width=60):
+    log_str = "\n{separator}\n{text}\n{separator}\n".format(
+        separator="=" * width,
+        text=string.center(width))
+    logger_level(log_str)
+
+
+@contextmanager
+def format_actor_exceptions(logger):
+    try:
+        try:
+            yield
+        except LeappRuntimeError as err:
+            msg = "{} - Please check the above details".format(err.message)
+            sys.stderr.write("\n")
+            sys.stderr.write(pretty_block_text(msg, color="", width=len(msg)))
+            logger.error(err.message)
+    finally:
+        pass
+
+
+def log_errors(errors, logger):
+    if errors:
+        pretty_block_log("ERRORS", logger.info)
+
+        for error in errors:
+            model = ErrorModel.create(json.loads(error['message']['data']))
+            error_message = model.message
+            if six.PY2:
+                error_message = model.message.encode('utf-8', 'xmlcharrefreplace')
+
+            logger.error("{time} [{severity}] Actor: {actor}\nMessage: {message}\n".format(
+                severity=model.severity.upper(),
+                message=error_message, time=model.time, actor=model.actor))
+            if model.details:
+                print('Summary:')
+                details = json.loads(model.details)
+                for detail in details:
+                    print('    {k}: {v}'.format(
+                        k=detail.capitalize(),
+                        v=details[detail].rstrip().replace('\n', '\n' + ' ' * (6 + len(detail)))))
+
+
+def log_inhibitors(context_id, logger):
+    from leapp.reporting import Flags  # pylint: disable=import-outside-toplevel
+    reports = fetch_upgrade_report_messages(context_id)
+    inhibitors = [report for report in reports if Flags.INHIBITOR in report.get('flags', [])]
+    if inhibitors:
+        pretty_block_log("UPGRADE INHIBITED", logger.error)
+        logger.error('Upgrade has been inhibited due to the following problems:')
+        for position, report in enumerate(inhibitors, start=1):
+            logger.error('{idx:5}. Inhibitor: {title}'.format(idx=position, title=report['title']))
+        logger.info('Consult the pre-upgrade report for details and possible remediation.')

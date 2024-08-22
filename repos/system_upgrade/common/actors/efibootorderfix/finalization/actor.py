@@ -33,6 +33,7 @@ class EfiFinalizationFix(Actor):
                 'Rocky Linux': 'rocky',
                 'Scientific Linux': 'redhat',
                 'EuroLinux': 'eurolinux',
+                'CloudLinux': 'centos',
         }
 
         efi_shimname_dict = {

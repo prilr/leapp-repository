@@ -1,5 +1,32 @@
-﻿from collections import defaultdict
+﻿import json
+from collections import defaultdict
 from leapp.models import PESIDRepositoryEntry, RepoMapEntry, RepositoriesMapping
+
+from leapp.exceptions import StopActorExecutionError
+from leapp.libraries.common.fetch import read_or_fetch
+from leapp.models import PESIDRepositoryEntry, RepoMapEntry
+
+
+def inhibit_upgrade(msg):
+    raise StopActorExecutionError(
+        msg,
+        details={'hint': ('Read documentation at the following link for more'
+                          ' information about how to retrieve the valid file:'
+                          ' https://access.redhat.com/articles/3664871')})
+
+
+def read_repofile(repofile, directory="/etc/leapp/files"):
+    # NOTE: what about catch StopActorExecution error when the file cannot be
+    # obtained -> then check whether old_repomap file exists and in such a case
+    # inform user they have to provde the new repomap.json file (we have the
+    # warning now only which could be potentially overlooked)
+    try:
+        return json.loads(read_or_fetch(repofile, directory))
+    except ValueError:
+        # The data does not contain a valid json
+        inhibit_upgrade('The repository mapping file is invalid: file does not contain a valid JSON object.')
+    return None  # Avoids inconsistent-return-statements warning
+
 
 class RepoMapData(object):
     VERSION_FORMAT = '1.2.0'

@@ -1,0 +1,7 @@
+#!/usr/bin/bash -e
+
+# can't be removed in the main transaction due to errors in %preun
+yum -y --setopt=tsflags=noscripts remove gettext-devel
+# can be removed normally
+yum -y remove alt-ruby2[5-7]-rubygem-rack
+yum -y remove alt-ruby3[0-2]-rubygem-rack

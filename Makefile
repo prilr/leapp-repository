@@ -292,7 +292,7 @@ install-deps:
 	case $(_PYTHON_VENV) in python3*) yum install -y ${shell echo $(_PYTHON_VENV) | tr -d .}; esac
 	@# in centos:7 python dependencies required gcc
 	case $(_PYTHON_VENV) in python3*) yum install gcc -y; esac
-	virtualenv --system-site-packages -p /usr/bin/$(_PYTHON_VENV) $(VENVNAME); \
+	virtualenv -p /usr/bin/$(_PYTHON_VENV) $(VENVNAME); \
 	. $(VENVNAME)/bin/activate; \
 	pip install -U pip; \
 	pip install --upgrade setuptools; \

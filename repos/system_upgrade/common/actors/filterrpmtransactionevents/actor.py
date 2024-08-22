@@ -18,14 +18,23 @@ class FilterRpmTransactionTasks(Actor):
     """
 
     name = 'check_rpm_transaction_events'
-    consumes = (PESRpmTransactionTasks, RpmTransactionTasks, DistributionSignedRPM,)
+    consumes = (PESRpmTransactionTasks, RpmTransactionTasks, DistributionSignedRPM, PreRemovedRpmPackages)
     produces = (FilteredRpmTransactionTasks,)
     tags = (IPUWorkflowTag, ChecksPhaseTag)
 
     def process(self):
         installed_pkgs = set()
+        preremoved_pkgs = set()
+        preremoved_pkgs_to_install = set()
+
         for rpm_pkgs in self.consume(DistributionSignedRPM):
             installed_pkgs.update([pkg.name for pkg in rpm_pkgs.items])
+
+        for rpm_pkgs in self.consume(PreRemovedRpmPackages):
+            preremoved_pkgs.update([pkg.name for pkg in rpm_pkgs.items])
+            preremoved_pkgs_to_install.update([pkg.name for pkg in rpm_pkgs.items if rpm_pkgs.install])
+
+        installed_pkgs.difference_update(preremoved_pkgs)
 
         local_rpms = set()
         to_install = set()
@@ -35,6 +44,8 @@ class FilterRpmTransactionTasks(Actor):
         to_reinstall = set()
         modules_to_enable = {}
         modules_to_reset = {}
+
+        to_install.update(preremoved_pkgs_to_install)
         for event in self.consume(RpmTransactionTasks, PESRpmTransactionTasks):
             local_rpms.update(event.local_rpms)
             to_install.update(event.to_install)
@@ -47,7 +58,9 @@ class FilterRpmTransactionTasks(Actor):
         to_remove.difference_update(to_keep)
 
         # run upgrade for the rest of RH signed pkgs which we do not have rule for
-        to_upgrade = installed_pkgs - (to_install | to_remove | to_reinstall)
+        to_upgrade = installed_pkgs - (to_install | to_remove | to_keep | to_reinstall)
+
+        self.log.debug('DNF modules to enable: {}'.format(modules_to_enable.keys()))
 
         self.produce(FilteredRpmTransactionTasks(
             local_rpms=list(local_rpms),

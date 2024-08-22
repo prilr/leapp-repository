@@ -580,6 +580,12 @@ def create_source_overlay(mounts_dir, scratch_dir, xfs_info, storage_info, mount
             # fallback to the deprecated OVL solution
             mounts = _prepare_required_mounts_old(scratch_dir, mounts_dir, _get_mountpoints(storage_info), xfs_info)
         with mounts.pop('/') as root_mount:
+            # it's important to make system_overlay shared because we
+            # later mount it into mount_target with some tricky way:
+            #  1. create system_overlay mount
+            #  2. mount system_overlay to mount_target (e.g. installroot)
+            #  3. mount other mounts like /tmp, /usr inside system_overlay
+            # if at stage 3 system_overlay is not shared, mounts will not appear in `mount_target`
             with mounting.OverlayMount(name='system_overlay', source='/', workdir=root_mount.target) as root_overlay:
                 if mount_target:
                     target = mounting.BindMount(source=root_overlay.target, target=mount_target)
@@ -608,11 +614,15 @@ def create_source_overlay(mounts_dir, scratch_dir, xfs_info, storage_info, mount
 # the code below is not affected, otherwise copy the function below with the
 # "_old" suffix.
 # #############################################################################
-def _ensure_enough_diskimage_space_old(space_needed, directory):
+def _ensure_enough_diskimage_space_old(space_needed, directory, xfs_mountpoint_count):
     stat = os.statvfs(directory)
     if (stat.f_frsize * stat.f_bavail) < (space_needed * 1024 * 1024):
         message = ('Not enough space available for creating required disk images in {directory}. ' +
                    'Needed: {space_needed} MiB').format(space_needed=space_needed, directory=directory)
+        # An arbitrary cutoff, but "how many XFS mountpoints is too much" is subjective.
+        if xfs_mountpoint_count > 10:
+            message += (". Hint: there are {} XFS mountpoints with ftype=0 on the system. Space "
+                        "required is calculated according to that amount".format(xfs_mountpoint_count))
         api.current_logger().error(message)
         raise StopActorExecutionError(message)
 
@@ -687,13 +697,14 @@ def _prepare_required_mounts_old(scratch_dir, mounts_dir, mount_points, xfs_info
     if not xfs_info.mountpoints_without_ftype:
         return result
 
-    space_needed = _overlay_disk_size_old() * len(xfs_info.mountpoints_without_ftype)
+    xfs_noftype_mounts = len(xfs_info.mountpoints_without_ftype)
+    space_needed = _overlay_disk_size_old() * xfs_noftype_mounts
     disk_images_directory = os.path.join(scratch_dir, 'diskimages')
 
     # Ensure we cleanup old disk images before we check for space constraints.
     run(['rm', '-rf', disk_images_directory])
     _create_diskimages_dir_old(scratch_dir, disk_images_directory)
-    _ensure_enough_diskimage_space_old(space_needed, scratch_dir)
+    _ensure_enough_diskimage_space_old(space_needed, scratch_dir, xfs_noftype_mounts)
 
     mount_names = [mount_point.fs_file for mount_point in mount_points]
 

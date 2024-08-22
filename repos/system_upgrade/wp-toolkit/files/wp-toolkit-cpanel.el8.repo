@@ -1,0 +1,11 @@
+[wp-toolkit-cpanel]
+name=WP Toolkit for cPanel
+baseurl=https://wp-toolkit.plesk.com/cPanel/CentOS-8-x86_64/latest/wp-toolkit/
+enabled=1
+gpgcheck=1
+
+[wp-toolkit-thirdparties]
+name=WP Toolkit third parties
+baseurl=https://wp-toolkit.plesk.com/cPanel/CentOS-8-x86_64/latest/thirdparty/
+enabled=1
+gpgcheck=1

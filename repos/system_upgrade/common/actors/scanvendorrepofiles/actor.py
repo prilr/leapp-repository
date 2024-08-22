@@ -6,6 +6,7 @@ from leapp.models import (
     VendorCustomTargetRepositoryList,
 )
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
+from leapp.libraries.stdlib import api
 
 
 class ScanVendorRepofiles(Actor):
