@@ -34,6 +34,6 @@ class CheckRhnVersionOverride(Actor):
                             reporting.Title(title),
                             reporting.Summary(summary),
                             reporting.Severity(reporting.Severity.MEDIUM),
-                            reporting.Tags([reporting.Tags.OS_FACTS]),
+                            reporting.Groups([reporting.Groups.OS_FACTS]),
                             reporting.RelatedResource('file', '/etc/sysconfig/rhn/up2date')
                         ])

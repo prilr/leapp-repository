@@ -77,5 +77,5 @@ class ReplaceRpmnewConfigs(Actor):
                     'Backed up repository files: \n{}'.format(deleted_string, replaced_string)
                 ),
                 reporting.Severity(reporting.Severity.MEDIUM),
-                reporting.Tags([reporting.Tags.UPGRADE_PROCESS])
+                reporting.Groups([reporting.Groups.UPGRADE_PROCESS])
             ])

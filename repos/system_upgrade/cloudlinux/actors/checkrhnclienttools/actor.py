@@ -52,7 +52,7 @@ class CheckRhnClientToolsVersion(Actor):
                 reporting.Title(title),
                 reporting.Summary(summary),
                 reporting.Severity(reporting.Severity.HIGH),
-                reporting.Tags([reporting.Tags.OS_FACTS]),
+                reporting.Groups([reporting.Groups.OS_FACTS]),
                 reporting.Groups([reporting.Groups.INHIBITOR]),
                 reporting.Remediation(hint=remediation),
             ])

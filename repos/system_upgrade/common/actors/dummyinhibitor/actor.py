@@ -24,6 +24,6 @@ class DummyInhibitor(Actor):
                     '/etc/leapp-simulate-inhibitor file is present, upgrade blocked by dummy_inhibitor actor.'
                 ),
                 reporting.Severity(reporting.Severity.HIGH),
-                reporting.Tags([reporting.Tags.SANITY]),
+                reporting.Groups([reporting.Groups.SANITY]),
                 reporting.Groups([reporting.Groups.INHIBITOR]),
             ])

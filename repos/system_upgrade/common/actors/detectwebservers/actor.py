@@ -45,9 +45,9 @@ class DetectWebServers(Actor):
                         " Detected webserver: {}.".format(server_name)
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([
-                        reporting.Tags.OS_FACTS,
-                        reporting.Tags.SERVICES
+                    reporting.Groups([
+                        reporting.Groups.OS_FACTS,
+                        reporting.Groups.SERVICES
                     ]),
                 ]
             )

@@ -133,7 +133,7 @@ class MySqlRepositorySetupLibrary(object):
                             "Problematic repository: {0}".format(target_repo.repoid)
                         ),
                         reporting.Severity(reporting.Severity.MEDIUM),
-                        reporting.Tags([reporting.Tags.REPOSITORY]),
+                        reporting.Groups([reporting.Groups.REPOSITORY]),
                         reporting.Groups([reporting.Groups.INHIBITOR]),
                         reporting.Remediation(
                             hint=(
@@ -249,7 +249,7 @@ class MySqlRepositorySetupLibrary(object):
                                 "Problematic repository: {0}".format(target_repo.repoid)
                             ),
                             reporting.Severity(reporting.Severity.MEDIUM),
-                            reporting.Tags([reporting.Tags.REPOSITORY]),
+                            reporting.Groups([reporting.Groups.REPOSITORY]),
                             reporting.Groups([reporting.Groups.INHIBITOR]),
                             reporting.Remediation(
                                 hint=(
@@ -298,7 +298,7 @@ class MySqlRepositorySetupLibrary(object):
                         "It is recommended to make a database backup before proceeding with the upgrade."
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([reporting.Tags.REPOSITORY]),
+                    reporting.Groups([reporting.Groups.REPOSITORY]),
                 ]
             )
 
@@ -325,7 +325,7 @@ class MySqlRepositorySetupLibrary(object):
                             "Detected: {0}".format(", ".join(self.mysql_types))
                         ),
                         reporting.Severity(reporting.Severity.MEDIUM),
-                        reporting.Tags([reporting.Tags.REPOSITORY, reporting.Tags.OS_FACTS]),
+                        reporting.Groups([reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]),
                     ]
                 )
 

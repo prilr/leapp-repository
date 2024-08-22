@@ -63,7 +63,7 @@ def check_grub_disks_for_legacy_grub():
             reporting.Title("GRUB Legacy is used on the system"),
             reporting.Summary(details.format(block_devices_fmt=block_devices_fmt)),
             reporting.Severity(reporting.Severity.HIGH),
-            reporting.Tags([reporting.Tags.BOOT]),
+            reporting.Groups([reporting.Groups.BOOT]),
             reporting.Remediation(hint=hint),
             reporting.Groups([reporting.Groups.INHIBITOR]),
             reporting.ExternalLink(url=MIGRATION_TO_GRUB2_GUIDE_URL,
