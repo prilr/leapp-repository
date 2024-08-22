@@ -53,6 +53,6 @@ class CheckRhnClientToolsVersion(Actor):
                 reporting.Summary(summary),
                 reporting.Severity(reporting.Severity.HIGH),
                 reporting.Tags([reporting.Tags.OS_FACTS]),
-                reporting.Flags([reporting.Flags.INHIBITOR]),
+                reporting.Groups([reporting.Groups.INHIBITOR]),
                 reporting.Remediation(hint=remediation),
             ])

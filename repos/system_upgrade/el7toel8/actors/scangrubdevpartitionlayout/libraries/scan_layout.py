@@ -1,6 +1,5 @@
 from leapp.libraries.stdlib import api, CalledProcessError, run
-from leapp.models import GRUBDevicePartitionLayout, PartitionInfo
-from leapp.libraries.common import grub
+from leapp.models import GRUBDevicePartitionLayout, GrubInfo, PartitionInfo
 
 SAFE_OFFSET_BYTES = 1024*1024  # 1MiB
 
@@ -82,20 +81,11 @@ def get_partition_layout(device):
 
 
 def scan_grub_device_partition_layout():
-    # oshyshatskyi: newer versions of leapp support multiple grub devices e.g. for raid
-    # because our version does not support that, we always check only one device
-    # https://github.com/oamg/leapp-repository/commit/2ba44076625e35aabfd2a1f9e45b2934f99f1e8d
-    grub_device = grub.get_grub_device()
-    if not grub_device:
+    grub_devices = next(api.consume(GrubInfo), None)
+    if not grub_devices:
         return
-    grub_devices = [grub_device]
 
-    # oshyshatskyi: originally rhel used actor to collect information
-    # but we are too out of date to cherry-pick it
-    # anyway, actor did the same thing:
-    #   devices = grub.get_grub_devices()
-    #   grub_info = GrubInfo(orig_devices=devices)
-    for device in grub_devices:
+    for device in grub_devices.orig_devices:
         dev_info = get_partition_layout(device)
         if dev_info:
             api.produce(dev_info)

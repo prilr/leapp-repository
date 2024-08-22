@@ -134,7 +134,7 @@ class MySqlRepositorySetupLibrary(object):
                         ),
                         reporting.Severity(reporting.Severity.MEDIUM),
                         reporting.Tags([reporting.Tags.REPOSITORY]),
-                        reporting.Flags([reporting.Flags.INHIBITOR]),
+                        reporting.Groups([reporting.Groups.INHIBITOR]),
                         reporting.Remediation(
                             hint=(
                                 "Upgrade to a more recent MySQL version, or"
@@ -250,7 +250,7 @@ class MySqlRepositorySetupLibrary(object):
                             ),
                             reporting.Severity(reporting.Severity.MEDIUM),
                             reporting.Tags([reporting.Tags.REPOSITORY]),
-                            reporting.Flags([reporting.Flags.INHIBITOR]),
+                            reporting.Groups([reporting.Groups.INHIBITOR]),
                             reporting.Remediation(
                                 hint=(
                                     "Upgrade to a more recent MySQL version, "

@@ -57,5 +57,5 @@ def check_first_partition_offset():
             reporting.Remediation(hint=hint.format(SAFE_OFFSET_BYTES // 1024)),
             reporting.Severity(reporting.Severity.HIGH),
             reporting.Tags([reporting.Tags.BOOT]),
-            reporting.Flags([reporting.Flags.INHIBITOR]),
+            reporting.Groups([reporting.Groups.INHIBITOR]),
         ])

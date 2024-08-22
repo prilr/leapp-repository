@@ -45,7 +45,7 @@ class UpdateAlmaLinuxKey(Actor):
                     reporting.Tags(
                         [reporting.Tags.OS_FACTS, reporting.Tags.NETWORK]
                     ),
-                    reporting.Flags([reporting.Flags.INHIBITOR]),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
                 ]
             )
         except OSError as e:
