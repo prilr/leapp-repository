@@ -1,3 +1,7 @@
+import errno
+from leapp.libraries.stdlib import api
+
+
 def global_value(config, default):
     """
     Find the global value for PermitRootLogin option in sshd_config.
@@ -41,6 +45,7 @@ def semantics_changes(config):
             in_match_enabled = True
 
     return config_global_value is None and not in_match_enabled
+
 
 def add_permitrootlogin_conf():
     CONFIG = '/etc/ssh/sshd_config'

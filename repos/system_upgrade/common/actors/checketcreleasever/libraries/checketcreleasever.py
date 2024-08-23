@@ -1,6 +1,7 @@
 from leapp import reporting
 from leapp.libraries.stdlib import api
 from leapp.models import PkgManagerInfo, RHUIInfo
+from leapp.libraries.common.config.version import get_target_major_version
 
 
 def handle_etc_releasever():

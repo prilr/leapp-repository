@@ -66,27 +66,27 @@ class OpenSshPermitRootLoginCheck(Actor):
         if not config.permit_root_login:
             add_permitrootlogin_conf()
             create_report([
-            reporting.Title('SSH configuration automatically modified to permit root login'),
-            reporting.Summary(
-                'Your OpenSSH configuration file does not explicitly state '
-                'the option PermitRootLogin in sshd_config file. '
-                'Its default is "yes" in RHEL7, but will change in '
-                'RHEL8 to "prohibit-password", which may affect your ability '
-                'to log onto this machine after the upgrade. '
-                'To prevent this from occuring, the PermitRootLogin option '
-                'has been explicity set to "yes" to preserve the default behaivour '
-                'after migration. '
-                'The original configuration file has been backed up to '
-                '/etc/ssh/sshd_config.leapp_backup'
-            ),
-            reporting.Severity(reporting.Severity.MEDIUM),
-            reporting.Groups(COMMON_REPORT_TAGS),
-            reporting.Remediation(
-              hint='If you would prefer to configure the root login policy yourself, '
-                   'consider setting the PermitRootLogin option '
-                   'in sshd_config explicitly.'
-            )
-            ] + resources)
+                reporting.Title('SSH configuration automatically modified to permit root login'),
+                reporting.Summary(
+                    'Your OpenSSH configuration file does not explicitly state '
+                    'the option PermitRootLogin in sshd_config file. '
+                    'Its default is "yes" in RHEL7, but will change in '
+                    'RHEL8 to "prohibit-password", which may affect your ability '
+                    'to log onto this machine after the upgrade. '
+                    'To prevent this from occuring, the PermitRootLogin option '
+                    'has been explicity set to "yes" to preserve the default behaivour '
+                    'after migration. '
+                    'The original configuration file has been backed up to '
+                    '/etc/ssh/sshd_config.leapp_backup'
+                ),
+                reporting.Severity(reporting.Severity.MEDIUM),
+                reporting.Groups(COMMON_REPORT_TAGS),
+                reporting.Remediation(
+                  hint='If you would prefer to configure the root login policy yourself, '
+                       'consider setting the PermitRootLogin option '
+                       'in sshd_config explicitly.'
+                )
+                ] + COMMON_RESOURCES)
             return
 
         # Check if there is at least one PermitRootLogin other than "no"
