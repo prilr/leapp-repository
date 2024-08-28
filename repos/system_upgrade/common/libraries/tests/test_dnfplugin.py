@@ -23,6 +23,10 @@ TEST_INSTALL_PACKAGES = TaskData(
     expected=('install1', 'install2'),
     initdata=('install1', 'install2')
 )
+TEST_REINSTALL_PACKAGES = TaskData(
+    expected=('reinstall1', 'reinstall1'),
+    initdata=('reinstall1', 'reinstall2')
+)
 TEST_REMOVE_PACKAGES = TaskData(
     expected=('remove1', 'remove2'),
     initdata=('remove1', 'remove2'),
@@ -44,6 +48,7 @@ class DATADnfPluginDataPkgsInfo(leapp.models.Model):
     topic = DATADnfPluginDataTopic
     local_rpms = fields.List(fields.String())
     to_install = fields.List(fields.StringEnum(choices=TEST_INSTALL_PACKAGES.expected))
+    to_reinstall = fields.List(fields.StringEnum(choices=TEST_REINSTALL_PACKAGES.expected))
     to_remove = fields.List(fields.StringEnum(choices=TEST_REMOVE_PACKAGES.expected))
     to_upgrade = fields.List(fields.StringEnum(choices=TEST_UPGRADE_PACKAGES.expected))
     modules_to_enable = fields.List(fields.StringEnum(choices=TEST_ENABLE_MODULES.expected))
@@ -133,6 +138,7 @@ def test_build_plugin_data_variations(
             to_install=TEST_INSTALL_PACKAGES.initdata,
             to_remove=TEST_REMOVE_PACKAGES.initdata,
             to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+            to_reinstall=[],
             modules_to_enable=TEST_ENABLE_MODULES.initdata
             )
     }
@@ -163,6 +169,7 @@ def test_build_plugin_data(monkeypatch):
                 to_install=TEST_INSTALL_PACKAGES.initdata,
                 to_remove=TEST_REMOVE_PACKAGES.initdata,
                 to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+                to_reinstall=[],
                 modules_to_enable=TEST_ENABLE_MODULES.initdata
                 )
             )
@@ -182,6 +189,7 @@ def test_build_plugin_data(monkeypatch):
                     to_install=TEST_INSTALL_PACKAGES.initdata,
                     to_remove=TEST_REMOVE_PACKAGES.initdata,
                     to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+                    to_reinstall=[],
                     # Enforcing the failure
                     modules_to_enable=(
                         leapp.models.Module(

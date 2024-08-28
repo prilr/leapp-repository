@@ -19,6 +19,7 @@ def mocked_get_rhsm_info(context):
     return info
 
 
+@pytest.mark.skipif(rhsm.skip_rhsm(), reason="Skip when rhsm is disabled")
 def test_scansubscriptionmanagementinfo(monkeypatch):
     actor_producs = produce_mocked()
 

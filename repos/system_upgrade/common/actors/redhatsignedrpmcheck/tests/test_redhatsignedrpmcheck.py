@@ -44,4 +44,4 @@ def test_actor_execution_with_unsigned_data(monkeypatch):
     assert len(packages) == 4
     redhatsignedrpmcheck.generate_report(packages)
     assert reporting.create_report.called == 1
-    assert 'Packages not signed by Red Hat found' in reporting.create_report.report_fields['title']
+    assert 'Packages not signed by a known packager found on the system' in reporting.create_report.report_fields['title']

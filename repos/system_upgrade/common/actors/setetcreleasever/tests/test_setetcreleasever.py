@@ -45,7 +45,7 @@ def test_set_releasever(monkeypatch, current_actor_context):
 
     msgs = [rhui_info, PkgManagerInfo(etc_releasever='7.7')]
 
-    expected_rel_ver = '8.0'
+    expected_rel_ver = '8'
     monkeypatch.setattr(setetcreleasever, '_set_releasever', mocked_set_releasever())
     monkeypatch.setattr(api, 'current_actor', CurrentActorMocked(
         msgs=msgs, dst_ver=expected_rel_ver

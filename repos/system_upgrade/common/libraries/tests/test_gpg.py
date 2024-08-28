@@ -10,6 +10,8 @@ from leapp.libraries.common.testutils import CurrentActorMocked
 from leapp.libraries.stdlib import api
 from leapp.models import GpgKey, InstalledRPM, RPM
 
+VENDORS_GPG = '/etc/leapp/files/vendors.d/rpm-gpg/'
+
 
 @pytest.mark.parametrize('target, product_type, exp', [
     ('8.6', 'beta', '../../files/rpm-gpg/8beta'),
@@ -23,7 +25,7 @@ def test_get_path_to_gpg_certs(monkeypatch, target, product_type, exp):
     monkeypatch.setattr(api, 'current_actor', current_actor)
 
     p = gpg.get_path_to_gpg_certs()
-    assert p == exp
+    assert p == [VENDORS_GPG, exp]
 
 
 def is_rhel7():

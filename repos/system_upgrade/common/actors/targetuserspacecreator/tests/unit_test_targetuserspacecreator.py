@@ -1033,7 +1033,7 @@ def test_consume_data(monkeypatch, raised, no_rhsm, testdata):
 
     monkeypatch.setattr(userspacegen.api, 'consume', mocked_consume)
     monkeypatch.setattr(userspacegen.api, 'current_logger', logger_mocked())
-    monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked(envars={'LEAPP_NO_RHSM': no_rhsm}))
+    monkeypatch.setattr(rhsm, 'skip_rhsm', lambda: no_rhsm == "1")
     if not xfs:
         xfs = models.XFSPresence()
     if not custom_repofiles:

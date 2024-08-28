@@ -128,7 +128,7 @@ def pkgs_into_tuples(pkgs):
 def test_event_application_fundamentals(monkeypatch, installed_pkgs, events, releases, expected_target_pkgs):
     """Trivial checks validating that the core event application algorithm reflects event semantics as expected."""
     monkeypatch.setattr(api, 'current_actor', CurrentActorMocked())
-    actual_target_pkgs, dummy_demodularized_pkgs = compute_packages_on_target_system(installed_pkgs, events, releases)
+    actual_target_pkgs, dummy_demodularized_pkgs, _ = compute_packages_on_target_system(installed_pkgs, events, releases)
 
     # Perform strict comparison
     actual_pkg_tuple_set = {(pkg.name, pkg.repository, pkg.modulestream) for pkg in actual_target_pkgs}
@@ -167,7 +167,7 @@ def test_compute_pkg_state(monkeypatch):
         Package('reintroduced', 'rhel7-repo', None),
     }
 
-    target_pkgs, dummy_demodularized_pkgs = compute_packages_on_target_system(installed_pkgs, events, [(8, 0), (8, 1)])
+    target_pkgs, dummy_demodularized_pkgs, _ = compute_packages_on_target_system(installed_pkgs, events, [(8, 0), (8, 1)])
 
     expected_target_pkgs = {
         Package('split01', 'rhel8-repo', None),
@@ -281,7 +281,8 @@ def test_transaction_configuration_has_effect(monkeypatch):
         return TransactionConfiguration(
             to_install=[_Pkg('pkg-a'), _Pkg('pkg-b')],
             to_remove=[_Pkg('pkg-c'), _Pkg('pkg-d')],
-            to_keep=[]
+            to_keep=[],
+            to_reinstall=[]
         )
 
     monkeypatch.setattr(pes_events_scanner, 'get_transaction_configuration', mocked_transaction_conf)
@@ -374,7 +375,7 @@ def test_modularity_info_distinguishes_pkgs(monkeypatch, installed_pkgs, expecte
     ]
 
     monkeypatch.setattr(api, 'current_actor', CurrentActorMocked())
-    target_pkgs, dummy_demodularized_pkgs = compute_packages_on_target_system(installed_pkgs, events, [(8, 1)])
+    target_pkgs, dummy_demodularized_pkgs, _ = compute_packages_on_target_system(installed_pkgs, events, [(8, 1)])
 
     assert pkgs_into_tuples(target_pkgs) == expected_target_pkgs
 
@@ -394,7 +395,7 @@ def test_pkgs_are_demodularized_when_crossing_major_version(monkeypatch):
         Package('demodularized', 'repo', ('module-demodularized', 'stream'))
     }
 
-    target_pkgs, demodularized_pkgs = compute_packages_on_target_system(installed_pkgs, events, [(8, 0)])
+    target_pkgs, demodularized_pkgs, _ = compute_packages_on_target_system(installed_pkgs, events, [(8, 0)])
 
     expected_target_pkgs = {
         Package('modular', 'repo1-out', ('module2', 'stream')),

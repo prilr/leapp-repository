@@ -385,3 +385,8 @@ def test_get_existing_product_certificates_missing_cert_directory(monkeypatch, a
     assert len(existing_product_certificates) == 1, fail_description
     fail_description = 'Library failed to identify certificate from mocked outputs.'
     assert existing_product_certificates[0] == '/etc/pki/product-default/cert', fail_description
+
+
+if rhsm.skip_rhsm():
+    # skip tests if rhsm is disabled
+    pytest.skip(allow_module_level=True)

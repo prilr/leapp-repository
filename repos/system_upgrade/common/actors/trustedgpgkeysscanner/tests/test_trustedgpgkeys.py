@@ -59,7 +59,7 @@ def test_get_pubkeys(monkeypatch):
         return [os.path.basename(i) for i in mocked_gpg_files.get_files()]
 
     monkeypatch.setattr(trustedgpgkeys.os, 'listdir', _mocked_listdir)
-    monkeypatch.setattr(trustedgpgkeys, 'get_path_to_gpg_certs', lambda: '/mydir/')
+    monkeypatch.setattr(trustedgpgkeys, 'get_path_to_gpg_certs', lambda: ['/mydir/'])
     monkeypatch.setattr(trustedgpgkeys, 'get_gpg_fp_from_file', mocked_gpg_files)
 
     pubkeys = trustedgpgkeys._get_pubkeys(installed_rpms)

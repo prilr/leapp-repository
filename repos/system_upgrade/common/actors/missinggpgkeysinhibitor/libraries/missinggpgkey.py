@@ -150,7 +150,7 @@ def _report(title, summary, keys, inhibitor=False):
         ' prior the upgrade.'
         ' If you want to proceed the in-place upgrade without checking any RPM'
         ' signatures, execute leapp with the `--nogpgcheck` option.'
-        .format(','.format(_get_path_to_gpg_certs()))
+        .format(','.format(get_path_to_gpg_certs()))
     )
     groups = [reporting.Groups.REPOSITORY]
     if inhibitor:
@@ -182,7 +182,7 @@ def _report_missing_keys(keys):
     summary = (
         'Some of the target repositories require GPG keys that are not installed'
         ' in the current RPM DB or are not stored in the {trust_dir} directory.'
-        .format(trust_dir=','.join(_get_path_to_gpg_certs()))
+        .format(trust_dir=','.join(get_path_to_gpg_certs()))
     )
     _report('Detected unknown GPG keys for target system repositories', summary, keys, True)
 
