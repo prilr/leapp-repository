@@ -28,11 +28,11 @@ def process():
         )
         return
 
-    for reponame in os.listdir(VENDORS_DIR):
-        if not reponame.endswith(REPOFILE_SUFFIX):
+    for repofile_name in os.listdir(VENDORS_DIR):
+        if not repofile_name.endswith(REPOFILE_SUFFIX):
             continue
         # Cut the .repo part to get only the name.
-        vendor_name = reponame[:-5]
+        vendor_name = repofile_name[:-5]
 
         active_vendors = []
         for vendor_list in api.consume(ActiveVendorList):
@@ -46,10 +46,10 @@ def process():
             )
             continue
 
-        full_repo_path = os.path.join(VENDORS_DIR, reponame)
-        repofile = repofileutils.parse_repofile(full_repo_path)
+        full_repo_path = os.path.join(VENDORS_DIR, repofile_name)
+        parsed_repofile = repofileutils.parse_repofile(full_repo_path)
         api.current_logger().debug(
-            "Vendor {} found in active list, processing file {}".format(vendor_name, reponame)
+            "Vendor {} found in active list, processing file {}".format(vendor_name, repofile_name)
         )
 
         api.produce(CustomTargetRepositoryFile(file=full_repo_path))
@@ -60,7 +60,7 @@ def process():
                 name=repo.name,
                 baseurl=repo.baseurl,
                 enabled=repo.enabled,
-            ) for repo in repofile.data
+            ) for repo in parsed_repofile.data
         ]
 
         api.produce(

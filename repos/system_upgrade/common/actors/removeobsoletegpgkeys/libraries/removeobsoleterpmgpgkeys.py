@@ -15,6 +15,7 @@ OBSOLETED_KEYS_MAP = {
         "gpg-pubkey-d4082792-5b32db75",
         "gpg-pubkey-3abb34f8-5ffd890e",
         "gpg-pubkey-6275f250-5e26cb2e",
+        "gpg-pubkey-73e3b907-6581b071", # PostgreSQL RPM Repository <pgsql-pkg-yum@lists.postgresql.org>
     ],
 }
 

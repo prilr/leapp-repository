@@ -1,11 +1,9 @@
-import os
-import os.path
-
 from leapp.actors import Actor
-from leapp.libraries.actor.peseventsscanner import pes_events_scanner
+from leapp.libraries.actor.pes_events_scanner import process
 from leapp.models import (
+    ConsumedDataAsset,
+    DistributionSignedRPM,
     EnabledModules,
-    InstalledRedHatSignedRPM,
     PESRpmTransactionTasks,
     RepositoriesBlacklisted,
     RepositoriesFacts,
@@ -17,9 +15,6 @@ from leapp.models import (
 )
 from leapp.reporting import Report
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
-
-LEAPP_FILES_DIR = "/etc/leapp/files"
-VENDORS_DIR = "/etc/leapp/files/vendors.d"
 
 
 class PesEventsScanner(Actor):
@@ -33,7 +28,7 @@ class PesEventsScanner(Actor):
     name = 'pes_events_scanner'
     consumes = (
         EnabledModules,
-        InstalledRedHatSignedRPM,
+        DistributionSignedRPM,
         RepositoriesBlacklisted,
         RepositoriesFacts,
         RepositoriesMapping,
@@ -41,24 +36,27 @@ class PesEventsScanner(Actor):
         RpmTransactionTasks,
         ActiveVendorList,
     )
-    produces = (PESRpmTransactionTasks, RepositoriesSetupTasks, Report)
+    produces = (ConsumedDataAsset, PESRpmTransactionTasks, RepositoriesSetupTasks, Report)
     tags = (IPUWorkflowTag, FactsPhaseTag)
 
     def process(self):
-        pes_events_scanner(LEAPP_FILES_DIR, "pes-events.json")
+        # todo: check after merge
+        process()
 
-        active_vendors = []
-        for vendor_list in self.consume(ActiveVendorList):
-            active_vendors.extend(vendor_list.data)
-
-        pes_json_suffix = "_pes.json"
-        if os.path.isdir(VENDORS_DIR):
-            vendor_pesfiles = list(filter(lambda vfile: pes_json_suffix in vfile, os.listdir(VENDORS_DIR)))
-
-            for pesfile in vendor_pesfiles:
-                self.log.debug("Scanning vendor PES file: {}".format(pesfile))
-                if pesfile[:-len(pes_json_suffix)] in active_vendors:
-                    self.log.debug("Vendor active, loading vendor PES file: {}".format(pesfile))
-                    pes_events_scanner(VENDORS_DIR, pesfile)
-                else:
-                    self.log.debug("Vendor inactive, ignoring vendor PES file: {}".format(pesfile))
+        # pes_events_scanner(LEAPP_FILES_DIR, "pes-events.json")
+        #
+        #         active_vendors = []
+        #         for vendor_list in self.consume(ActiveVendorList):
+        #             active_vendors.extend(vendor_list.data)
+        #
+        #         pes_json_suffix = "_pes.json"
+        #         if os.path.isdir(VENDORS_DIR):
+        #             vendor_pesfiles = list(filter(lambda vfile: pes_json_suffix in vfile, os.listdir(VENDORS_DIR)))
+        #
+        #             for pesfile in vendor_pesfiles:
+        #                 self.log.debug("Scanning vendor PES file: {}".format(pesfile))
+        #                 if pesfile[:-len(pes_json_suffix)] in active_vendors:
+        #                     self.log.debug("Vendor active, loading vendor PES file: {}".format(pesfile))
+        #                     pes_events_scanner(VENDORS_DIR, pesfile)
+        #                 else:
+        #                     self.log.debug("Vendor inactive, ignoring vendor PES file: {}".format(pesfile))

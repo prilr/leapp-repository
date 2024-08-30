@@ -30,7 +30,7 @@ def report_inhibitor(repofile_name):
                 " repositories, which may result in some packages being downgraded or keeping their CL7 versions."
             ),
             reporting.Severity(reporting.Severity.MEDIUM),
-            reporting.Tags([reporting.Tags.OS_FACTS, reporting.Tags.UPGRADE_PROCESS, reporting.Tags.REPOSITORY]),
+            reporting.Groups([reporting.Groups.OS_FACTS, reporting.Groups.UPGRADE_PROCESS, reporting.Groups.REPOSITORY]),
         ]
     )
 

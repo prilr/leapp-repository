@@ -42,10 +42,10 @@ class UpdateAlmaLinuxKey(Actor):
                         hint="Check the state of this system's network connection and the reachability of the key URL."
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags(
-                        [reporting.Tags.OS_FACTS, reporting.Tags.NETWORK]
+                    reporting.Groups(
+                        [reporting.Groups.OS_FACTS, reporting.Groups.NETWORK]
                     ),
-                    reporting.Flags([reporting.Flags.INHIBITOR]),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
                 ]
             )
         except OSError as e:

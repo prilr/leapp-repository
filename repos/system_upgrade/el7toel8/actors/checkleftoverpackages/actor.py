@@ -27,7 +27,7 @@ class CheckLeftoverPackages(Actor):
     Actor produces message containing these packages. Message is empty if there are no el7 package left.
     """
 
-    name = "check_leftover_packages"
+    name = 'check_leftover_packages'
     consumes = (TransactionCompleted, InstalledUnsignedRPM)
     produces = (LeftoverPackages,)
     tags = (RPMUpgradePhaseTag, IPUWorkflowTag)

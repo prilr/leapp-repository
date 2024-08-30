@@ -1,6 +1,6 @@
 from os import listdir, path
 
-from leapp.libraries.stdlib import CalledProcessError, api, run
+from leapp.libraries.stdlib import api, CalledProcessError, run
 from leapp.models import SapHanaInfo, SapHanaInstanceInfo, SapHanaManifestEntry
 
 HANA_BASE_PATH = '/hana/shared'
@@ -37,7 +37,7 @@ def parse_manifest(path):
                     # Most likely an empty line, but we're being permissive here and ignore failures.
                     # In the end it's all about having the right values available.
                     if line:
-                        api.current_logger().warn(
+                        api.current_logger().warning(
                             'Failed to parse line in manifest: {file}. Line was: `{line}`'.format(file=path,
                                                                                                   line=line),
                             exc_info=True)
@@ -113,7 +113,7 @@ def get_instance_status(instance_number, sapcontrol_path, admin_name):
         # GetProcessList has some oddities, like returning non zero exit codes with special meanings.
         # Exit code 3 = All processes are running correctly
         # Exit code 4 = All processes stopped
-        # Other exit codes aren't handled at this time and it's assumed that SAP HANA is possibly in some unusal
+        # Other exit codes aren't handled at this time and it's assumed that SAP HANA is possibly in some unusual
         # state. Such as starting/stopping but also that it is in some kind of failure state.
         output = run([
             'sudo', '-u', admin_name, sapcontrol_path, '-nr', instance_number, '-function', 'GetProcessList'],
@@ -128,6 +128,6 @@ def get_instance_status(instance_number, sapcontrol_path, admin_name):
         # In that case there are always more than 7 lines.
         return len(output['stdout'].split('\n')) > 7
     except CalledProcessError:
-        api.current_logger().warn(
+        api.current_logger().warning(
             'Failed to retrieve SAP HANA instance status from sapcontrol - Considering it as not running.')
         return False

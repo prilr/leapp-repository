@@ -1,7 +1,7 @@
 import os.path
 
-from leapp.models import RpmTransactionTasks, InstalledRedHatSignedRPM
 from leapp.libraries.stdlib import api
+from leapp.models import DistributionSignedRPM, RpmTransactionTasks
 
 
 def load_tasks_file(path, logger):
@@ -35,7 +35,7 @@ def filter_out(installed_rpm_names, to_filter, debug_msg):
 
 def load_tasks(base_dir, logger):
     # Loads configuration files to_install, to_keep, and to_remove from the given base directory
-    rpms = next(api.consume(InstalledRedHatSignedRPM))
+    rpms = next(api.consume(DistributionSignedRPM))
     rpm_names = [rpm.name for rpm in rpms.items]
 
     to_install = load_tasks_file(os.path.join(base_dir, 'to_install'), logger)

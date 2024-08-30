@@ -52,5 +52,5 @@ class EnableYumSpacewalkPlugin(Actor):
                 reporting.Title(title),
                 reporting.Summary(summary),
                 reporting.Severity(reporting.Severity.MEDIUM),
-                reporting.Tags([reporting.Tags.SANITY])
+                reporting.Groups([reporting.Groups.SANITY])
             ])

@@ -1,6 +1,6 @@
 from leapp import reporting
 from leapp.libraries.stdlib import api
-from leapp.models import InstalledRedHatSignedRPM
+from leapp.models import DistributionSignedRPM
 
 
 def get_kernel_rpm_release(rpm):
@@ -16,7 +16,7 @@ def get_kernel_devel_rpms():
     """
     Get all installed kernel-devel packages ordered by release number (ascending).
     """
-    rpms = next(api.consume(InstalledRedHatSignedRPM), InstalledRedHatSignedRPM())
+    rpms = next(api.consume(DistributionSignedRPM), DistributionSignedRPM())
     return sorted([pkg for pkg in rpms.items if pkg.name == 'kernel-devel'], key=get_kernel_rpm_release)
 
 
@@ -35,8 +35,8 @@ def process():
             reporting.Title(title),
             reporting.Summary(summary),
             reporting.Severity(reporting.Severity.HIGH),
-            reporting.Tags([reporting.Tags.KERNEL]),
-            reporting.Flags([reporting.Flags.INHIBITOR]),
+            reporting.Groups([reporting.Groups.KERNEL]),
+            reporting.Groups([reporting.Groups.INHIBITOR]),
             reporting.Remediation(hint=hint, commands=commands),
             reporting.RelatedResource('package', 'kernel-devel')
         ])

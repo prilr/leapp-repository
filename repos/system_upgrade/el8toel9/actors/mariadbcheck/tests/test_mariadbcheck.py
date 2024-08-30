@@ -4,7 +4,7 @@ from leapp import reporting
 from leapp.libraries.actor.mariadbcheck import report_installed_packages
 from leapp.libraries.common.testutils import create_report_mocked, CurrentActorMocked
 from leapp.libraries.stdlib import api
-from leapp.models import InstalledRedHatSignedRPM, RPM
+from leapp.models import DistributionSignedRPM, RPM
 
 
 def _generate_rpm_with_name(name):
@@ -35,7 +35,7 @@ def test_actor_execution(monkeypatch, has_server):
     Parametrized helper function for test_actor_* functions.
 
     First generate list of RPM models based on set arguments. Then, run
-    the actor feeded with our RPM list. Finally, assert Reports
+    the actor fed with our RPM list. Finally, assert Reports
     according to set arguments.
 
     Parameters:
@@ -50,11 +50,11 @@ def test_actor_execution(monkeypatch, has_server):
         # Add mariadb-server
         rpms += [_generate_rpm_with_name('mariadb-server')]
 
-    curr_actor_mocked = CurrentActorMocked(msgs=[InstalledRedHatSignedRPM(items=rpms)])
+    curr_actor_mocked = CurrentActorMocked(msgs=[DistributionSignedRPM(items=rpms)])
     monkeypatch.setattr(api, 'current_actor', curr_actor_mocked)
     monkeypatch.setattr(reporting, "create_report", create_report_mocked())
 
-    # Executed actor feeded with fake RPMs
+    # Executed actor fed with fake RPMs
     report_installed_packages(_context=api)
 
     if has_server:

@@ -1,4 +1,8 @@
+from __future__ import division, print_function
+
 import os
+import subprocess
+import sys
 from collections import namedtuple
 
 import pytest
@@ -10,6 +14,12 @@ from leapp.libraries.common import overlaygen, repofileutils, rhsm
 from leapp.libraries.common.config import architecture
 from leapp.libraries.common.testutils import CurrentActorMocked, logger_mocked, produce_mocked
 from leapp.utils.deprecation import suppress_deprecation
+
+if sys.version_info < (2, 8):
+    from pathlib2 import Path
+else:
+    from pathlib import Path
+
 
 CUR_DIR = os.path.dirname(os.path.abspath(__file__))
 _CERTS_PATH = os.path.join(CUR_DIR, '../../../files', userspacegen.PROD_CERTS_FOLDER)
@@ -27,6 +37,7 @@ def adjust_cwd():
 class MockedMountingBase(object):
     def __init__(self, **dummy_kwargs):
         self.called_copytree_from = []
+        self.target = ''
 
     def copytree_from(self, src, dst):
         self.called_copytree_from.append((src, dst))
@@ -45,6 +56,807 @@ class MockedMountingBase(object):
 
     def __exit__(self, exception_type, exception_value, traceback):
         pass
+
+
+def traverse_structure(structure, root=Path('/')):
+    """
+    Given a description of a directory structure, return fullpaths to the
+    files and what they link to.
+
+    :param structure: A dict which defined the directory structure.  See below
+        for what it looks like.
+    :param root: A path to prefix to the files.  On an actual run in production.
+        this would be `/` but since we're doing this in a unittest, it needs to
+        be a temporary directory.
+    :returns: This is a generator, so pairs of (filepath, what it links to) will
+        be returned one at a time, each time through the iterable.
+
+    The semantics of `structure` are as follows:
+
+    1. The outermost dictionary encodes the root of a directory structure
+
+    2. Depending on the value for a key in a dict, each key in the dictionary
+       denotes the name of either a:
+         a) directory -- if value is dict
+         b) regular file -- if value is None
+         c) symlink -- if a value is str
+
+     3. The value of a symlink entry is a absolute path to a file in the context of
+        the structure.
+
+    .. warning:: Empty directories are not returned.
+    """
+    for filename, links_to in structure.items():
+        filepath = root / filename
+
+        if isinstance(links_to, dict):
+            for pair in traverse_structure(links_to, filepath):
+                yield pair
+        else:
+            yield (filepath, links_to)
+
+
+def assert_directory_structure_matches(root, initial, expected):
+    # Assert every file that is supposed to be present is present
+    for filepath, links_to in traverse_structure(expected, root=root / 'expected'):
+        assert filepath.exists(), "{} was supposed to exist and does not".format(filepath)
+
+        if links_to is None:
+            assert filepath.is_file(), "{} was supposed to be a file but is not".format(filepath)
+            continue
+
+        assert filepath.is_symlink(), '{} was supposed to be a symlink but is not'.format(filepath)
+
+        # We need to rewrite absolute paths because:
+        # * links_to contains an absolute path to the resource where the root
+        #   directory is `/`.
+        # * In our test case, the source resource is rooted in a temporary
+        #   directory rather than '/'.
+        # * The temporary directory name is root / 'initial'.
+        # So we rewrite the initial `/` to be `root/{initial}` to account for
+        # that.  In production, the root directory will be `/` so no rewriting
+        # will happen there.
+        #
+        if links_to.startswith('/'):
+            links_to = str(root / 'initial' / links_to.lstrip('/'))
+
+        actual_links_to = os.readlink(str(filepath))
+        assert actual_links_to == str(links_to), (
+            '{} linked to {} instead of {}'.format(filepath, actual_links_to, links_to))
+
+    # Assert there are no extra files
+    result_dir = str(root / 'expected')
+    for fileroot, dummy_dirs, files in os.walk(result_dir):
+        for filename in files:
+            dir_path = os.path.relpath(fileroot, result_dir).split('/')
+
+            cwd = expected
+            for directory in dir_path:
+                cwd = cwd[directory]
+
+            assert filename in cwd
+
+            filepath = os.path.join(fileroot, filename)
+            if os.path.islink(filepath):
+                links_to = os.readlink(filepath)
+                # We rewrite absolute paths because the root directory is in
+                # a temp dir instead of `/` in the unittest.  See the comment
+                # where we rewrite `links_to` for the previous loop in this
+                # function for complete details.
+                if links_to.startswith('/'):
+                    links_to = '/' + os.path.relpath(links_to, str(root / 'initial'))
+                assert cwd[filename] == links_to
+
+
+@pytest.fixture
+def temp_directory_layout(tmp_path, initial_structure):
+    for filepath, links_to in traverse_structure(initial_structure, root=tmp_path / 'initial'):
+        # Directories are inlined by traverse_structure so we need to create
+        # them here
+        file_path = tmp_path / filepath
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Real file
+        if links_to is None:
+            file_path.touch()
+            continue
+
+        # Symlinks
+        if links_to.startswith('/'):
+            # Absolute symlink
+            file_path.symlink_to(tmp_path / 'initial' / links_to.lstrip('/'))
+        else:
+            # Relative symlink
+            file_path.symlink_to(links_to)
+
+    (tmp_path / 'expected').mkdir()
+    assert (tmp_path / 'expected').exists()
+
+    return tmp_path
+
+
+# The semantics of initial_structure and expected_structure are defined in the
+# traverse_structure() docstring.
+@pytest.mark.parametrize('initial_structure,expected_structure', [
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': None
+            }
+        },
+        {
+            'dir': {
+                'fileA': None
+            },
+        },
+        id="Copy_a_regular_file"
+    )),
+    # Absolute symlink tests
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/nonexistent'
+            }
+        },
+        {
+            'dir': {},
+        },
+        id="Absolute_do_not_copy_a_broken_symlink"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/nonexistent'
+            }
+        },
+        {
+            'dir': {}
+        },
+        id="Absolute_do_not_copy_a_chain_of_broken_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/nonexistent-dir/nonexistent'
+            },
+        },
+        {
+            'dir': {},
+        },
+        id="Absolute_do_not_copy_a_broken_symlink_to_a_nonexistent_directory"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': '/dir/fileA',
+                'fileD': '/dir/fileD',
+            }
+        },
+        {
+            'dir': {}
+        },
+        id="Absolute_do_not_copy_circular_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': None
+            }
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': None
+            }
+        },
+        id="Absolute_copy_a_regular_symlink"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': None
+            }
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': None
+            }
+        },
+        id="Absolute_copy_a_chain_of_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': '/outside/fileOut',
+                'fileE': None
+            },
+            'outside': {
+                'fileOut': '/outside/fileD',
+                'fileD': '/dir/fileE'
+            }
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': '/dir/fileE',
+                'fileE': None,
+            }
+        },
+        id="Absolute_copy_a_link_to_a_file_outside_the_considered_directory_as_file"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'nested': {
+                    'fileA': '/dir/nested/fileB',
+                    'fileB': '/dir/nested/fileC',
+                    'fileC': '/outside/fileOut',
+                    'fileE': None
+                }
+            },
+            'outside': {
+                'fileOut': '/outside/fileD',
+                'fileD': '/dir/nested/fileE'
+            }
+        },
+        {
+            'dir': {
+                'nested': {
+                    'fileA': '/dir/nested/fileB',
+                    'fileB': '/dir/nested/fileC',
+                    'fileC': '/dir/nested/fileE',
+                    'fileE': None
+                }
+            }
+        },
+        id="Absolute_copy_a_link_to_a_file_outside_with_a_nested_structure_within_the_source_dir"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': '/outside/nested/fileOut',
+                'fileE': None
+            },
+            'outside': {
+                'nested': {
+                    'fileOut': '/outside/nested/fileD',
+                    'fileD': '/dir/fileE'
+                }
+            }
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': '/dir/fileC',
+                'fileC': '/dir/fileE',
+                'fileE': None,
+            }
+        },
+        id="Absolute_copy_a_link_to_a_file_outside_with_a_nested_structure_in_the_outside_dir"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/outside/fileOut',
+                'fileB': None,
+            },
+            'outside': {
+                'fileOut': '../dir/fileB',
+            },
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': None,
+            },
+        },
+        id="Absolute_symlink_that_leaves_the_directory_but_returns_with_relative_outside"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '/outside/fileB',
+                'fileB': None,
+            },
+            'outside': '/dir',
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': None,
+            },
+        },
+        id="Absolute_symlink_to_a_file_inside_via_a_symlink_to_the_rootdir"
+    )),
+    # This should be fixed but not necessarily for this release.
+    # It makes sure that when we have two separate links to the
+    # same file outside of /etc/pki, one of the links is copied
+    # as a real file and the other is made a link to the copy.
+    # (Right now, the real file is copied in place of both links.)
+    # (pytest.param(
+    #     {
+    #         'dir': {
+    #             'fileA': '/outside/fileC',
+    #             'fileB': '/outside/fileC',
+    #         },
+    #         'outside': {
+    #             'fileC': None,
+    #         },
+    #     },
+    #     {
+    #         'dir': {
+    #             'fileA': None,
+    #             'fileB': '/dir/fileA',
+    #         },
+    #     },
+    #     id="Absolute_two_symlinks_to_the_same_copied_file"
+    # )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': '/dir/inside',
+                'inside': {
+                    'fileB': None,
+                },
+            },
+        },
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': '/dir/inside',
+                'inside': {
+                    'fileB': None,
+                },
+            },
+        },
+        id="Absolute_symlink_to_a_dir_inside"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': '/outside',
+            },
+            'outside': {
+                'fileB': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': {
+                    'fileB': None,
+                },
+            },
+        },
+        id="Absolute_symlink_to_a_dir_outside"
+    )),
+    (pytest.param(
+        # This one is very tricky:
+        # * The user has made /etc/pki a symlink to some other directory that
+        #   they keep certificates.
+        # * In the target system, we are going to make /etc/pki an actual
+        #   directory with the contents that the actual directory on the host
+        #   system had.
+        {
+            'dir': '/funkydir',
+            'funkydir': {
+                'fileA': '/funkydir/fileB',
+                'fileB': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': '/dir/fileB',
+                'fileB': None,
+            },
+        },
+        id="Absolute_symlink_where_srcdir_is_a_symlink_on_the_host_system"
+    )),
+    # Relative symlink tests
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'nonexistent'
+            },
+        },
+        {
+            'dir': {},
+        },
+        id="Relative_do_not_copy_a_broken_symlink"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'nonexistent'
+            }
+        },
+        {
+            'dir': {}
+        },
+        id="Relative_do_not_copy_a_chain_of_broken_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'nonexistent-dir/nonexistent'
+            },
+        },
+        {
+            'dir': {},
+        },
+        id="Relative_do_not_copy_a_broken_symlink_to_a_nonexistent_directory"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': 'fileA',
+                'fileD': 'fileD',
+            }
+        },
+        {
+            'dir': {}
+        },
+        id="Relative_do_not_copy_circular_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        id="Relative_copy_a_regular_symlink_to_a_file_in_the_same_directory"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'dir2/../fileB',
+                'fileB': None,
+                'dir2': {
+                    'fileC': None
+                },
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+                'dir2': {
+                    'fileC': None
+                },
+            },
+        },
+        id="Relative_symlink_with_parent_dir_but_still_in_same_directory"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': None
+            }
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': None
+            }
+        },
+        id="Relative_copy_a_chain_of_symlinks"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': '../outside/fileOut',
+                'fileE': None
+            },
+            'outside': {
+                'fileOut': 'fileD',
+                'fileD': '../dir/fileE'
+            }
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': 'fileE',
+                'fileE': None,
+            }
+        },
+        id="Relative_copy_a_link_to_a_file_outside_the_considered_directory_as_file"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '../outside/fileOut',
+                'fileB': None,
+            },
+            'outside': {
+                'fileOut': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': None,
+                'fileB': None,
+            },
+        },
+        id="Relative_symlink_to_outside"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'nested/fileB',
+                'nested': {
+                    'fileB': None,
+                },
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'nested/fileB',
+                'nested': {
+                    'fileB': None,
+                },
+            },
+        },
+        id="Relative_copy_a_symlink_to_a_file_in_a_subdir"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileF': 'nested/fileC',
+                'nested': {
+                    'fileA': 'fileB',
+                    'fileB': 'fileC',
+                    'fileC': '../../outside/fileOut',
+                    'fileE': None,
+                }
+            },
+            'outside': {
+                'fileOut': 'fileD',
+                'fileD': '../dir/nested/fileE',
+            }
+        },
+        {
+            'dir': {
+                'fileF': 'nested/fileC',
+                'nested': {
+                    'fileA': 'fileB',
+                    'fileB': 'fileC',
+                    'fileC': 'fileE',
+                    'fileE': None,
+                }
+            }
+        },
+        id="Relative_copy_a_link_to_a_file_outside_with_a_nested_structure_within_the_source_dir"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': '../outside/nested/fileOut',
+                'fileE': None
+            },
+            'outside': {
+                'nested': {
+                    'fileOut': 'fileD',
+                    'fileD': '../../dir/fileE'
+                }
+            }
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': 'fileC',
+                'fileC': 'fileE',
+                'fileE': None,
+            }
+        },
+        id="Relative_copy_a_link_to_a_file_outside_with_a_nested_structure_in_the_outside_dir"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '../outside/fileOut',
+                'fileB': None,
+            },
+            'outside': {
+                'fileOut': '../dir/fileB',
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        id="Relative_symlink_that_leaves_the_directory_but_returns"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '../outside/fileOut',
+                'fileB': None,
+            },
+            'outside': {
+                'fileOut': '/dir/fileB',
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        id="Relative_symlink_that_leaves_the_directory_but_returns_with_absolute_outside"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': '../outside/fileB',
+                'fileB': None,
+            },
+            'outside': '/dir',
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        id="Relative_symlink_to_a_file_inside_via_a_symlink_to_the_rootdir"
+    )),
+    # This should be fixed but not necessarily for this release.
+    # It makes sure that when we have two separate links to the
+    # same file outside of /etc/pki, one of the links is copied
+    # as a real file and the other is made a link to the copy.
+    # (Right now, the real file is copied in place of both links.)
+    # (pytest.param(
+    #     {
+    #         'dir': {
+    #             'fileA': '../outside/fileC',
+    #             'fileB': '../outside/fileC',
+    #         },
+    #         'outside': {
+    #             'fileC': None,
+    #         },
+    #     },
+    #     {
+    #         'dir': {
+    #             'fileA': None,
+    #             'fileB': 'fileA',
+    #         },
+    #     },
+    #     id="Relative_two_symlinks_to_the_same_copied_file"
+    # )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': '../outside',
+            },
+            'outside': {
+                'fileB': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': {
+                    'fileB': None,
+                },
+            },
+        },
+        id="Relative_symlink_to_a_dir_outside"
+    )),
+    (pytest.param(
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': 'inside',
+                'inside': {
+                    'fileB': None,
+                },
+            },
+        },
+        {
+            'dir': {
+                'fileA': None,
+                'link_to_dir': 'inside',
+                'inside': {
+                    'fileB': None,
+                },
+            },
+        },
+        id="Relative_symlink_to_a_dir_inside"
+    )),
+    (pytest.param(
+        # This one is very tricky:
+        # * The user has made /etc/pki a symlink to some other directory that
+        #   they keep certificates.
+        # * In the target system, we are going to make /etc/pki an actual
+        #   directory with the contents that the actual directory on the host
+        #   system had.
+        {
+            'dir': 'funkydir',
+            'funkydir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        {
+            'dir': {
+                'fileA': 'fileB',
+                'fileB': None,
+            },
+        },
+        id="Relative_symlink_where_srcdir_is_a_symlink_on_the_host_system"
+    )),
+]
+)
+def test_copy_decouple(monkeypatch, temp_directory_layout, initial_structure, expected_structure):
+
+    def run_mocked(command):
+        subprocess.check_call(
+            ' '.join(command),
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+
+    monkeypatch.setattr(userspacegen, 'run', run_mocked)
+    expected_dir = temp_directory_layout / 'expected' / 'dir'
+    expected_dir.mkdir()
+    userspacegen._copy_decouple(
+            str(temp_directory_layout / 'initial' / 'dir'),
+            str(expected_dir),
+            )
+
+    try:
+        assert_directory_structure_matches(temp_directory_layout, initial_structure, expected_structure)
+    except AssertionError:
+        # For debugging purposes, print out the entire directory structure if an
+        # assertion failed.
+        for rootdir, dirs, files in os.walk(temp_directory_layout):
+            for d in dirs:
+                print(os.path.join(rootdir, d))
+            for f in files:
+                filename = os.path.join(rootdir, f)
+                print("  {}".format(filename))
+                if os.path.islink(filename):
+                    print("    => Links to: {}".format(os.readlink(filename)))
+
+        # Then re-raise the assertion
+        raise
 
 
 @pytest.mark.parametrize('result,dst_ver,arch,prod_type', [
@@ -84,7 +896,12 @@ def _gen_packages_msgs():
 
 _PACKAGES_MSGS = _gen_packages_msgs()
 _RHSMINFO_MSG = models.RHSMInfo(attached_skus=['testing-sku'])
-_RHUIINFO_MSG = models.RHUIInfo(provider='aws')
+_RHUIINFO_MSG = models.RHUIInfo(provider='aws',
+                                src_client_pkg_names=['rh-amazon-rhui-client'],
+                                target_client_pkg_names=['rh-amazon-rhui-client'],
+                                target_client_setup_info=models.TargetRHUISetupInfo(
+                                    preinstall_tasks=models.TargetRHUIPreInstallTasks(),
+                                    postinstall_tasks=models.TargetRHUIPostInstallTasks()))
 _XFS_MSG = models.XFSPresence()
 _STORAGEINFO_MSG = models.StorageInfo()
 _CTRF_MSGS = [
@@ -216,7 +1033,7 @@ def test_consume_data(monkeypatch, raised, no_rhsm, testdata):
 
     monkeypatch.setattr(userspacegen.api, 'consume', mocked_consume)
     monkeypatch.setattr(userspacegen.api, 'current_logger', logger_mocked())
-    monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked(envars={'LEAPP_NO_RHSM': no_rhsm}))
+    monkeypatch.setattr(rhsm, 'skip_rhsm', lambda: no_rhsm == "1")
     if not xfs:
         xfs = models.XFSPresence()
     if not custom_repofiles:
@@ -301,17 +1118,20 @@ def test_gather_target_repositories_rhui(monkeypatch):
     assert target_repoids == set(['rhui-1', 'rhui-2'])
 
 
-@pytest.mark.skip(reason="Currently not implemented in the actor. It's TODO.")
-def test_gather_target_repositories_required_not_available(monkeypatch):
+def test_gather_target_repositories_baseos_appstream_not_available(monkeypatch):
     # If the repos that Leapp identifies as required for the upgrade (based on the repo mapping and PES data) are not
     # available, an exception shall be raised
+
+    indata = testInData(
+        _PACKAGES_MSGS, _RHSMINFO_MSG, None, _XFS_MSG, _STORAGEINFO_MSG, None
+    )
+    monkeypatch.setattr(rhsm, 'skip_rhsm', lambda: False)
 
     mocked_produce = produce_mocked()
     monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked())
     monkeypatch.setattr(userspacegen.api.current_actor(), 'produce', mocked_produce)
     # The available RHSM repos
     monkeypatch.setattr(rhsm, 'get_available_repo_ids', lambda x: ['repoidA', 'repoidB', 'repoidC'])
-    monkeypatch.setattr(rhsm, 'skip_rhsm', lambda: False)
     # The required RHEL repos based on the repo mapping and PES data + custom repos required by third party actors
     monkeypatch.setattr(userspacegen.api, 'consume', lambda x: iter([models.TargetRepositories(
         rhel_repos=[models.RHELTargetRepository(repoid='repoidX'),
@@ -319,12 +1139,41 @@ def test_gather_target_repositories_required_not_available(monkeypatch):
         custom_repos=[models.CustomTargetRepository(repoid='repoidCustom')])]))
 
     with pytest.raises(StopActorExecution):
-        userspacegen.gather_target_repositories(None)
-        assert mocked_produce.called
-        reports = [m.report for m in mocked_produce.model_instances if isinstance(m, reporting.Report)]
-        inhibitors = [m for m in reports if 'INHIBITOR' in m.get('flags', ())]
-        assert len(inhibitors) == 1
-        assert inhibitors[0].get('title', '') == 'Cannot find required basic RHEL target repositories.'
+        userspacegen.gather_target_repositories(None, indata)
+    assert mocked_produce.called
+    reports = [m.report for m in mocked_produce.model_instances if isinstance(m, reporting.Report)]
+    inhibitors = [m for m in reports if 'inhibitor' in m.get('groups', ())]
+    assert len(inhibitors) == 1
+    assert inhibitors[0].get('title', '') == 'Cannot find required basic RHEL target repositories.'
+    # Now test the case when either of AppStream and BaseOs is not available, upgrade should be inhibited
+    mocked_produce = produce_mocked()
+    monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked())
+    monkeypatch.setattr(userspacegen.api.current_actor(), 'produce', mocked_produce)
+    monkeypatch.setattr(rhsm, 'get_available_repo_ids', lambda x: ['repoidA', 'repoidB', 'repoidC-appstream'])
+    monkeypatch.setattr(userspacegen.api, 'consume', lambda x: iter([models.TargetRepositories(
+        rhel_repos=[models.RHELTargetRepository(repoid='repoidC-appstream'),
+                    models.RHELTargetRepository(repoid='repoidA')],
+        custom_repos=[models.CustomTargetRepository(repoid='repoidCustom')])]))
+    with pytest.raises(StopActorExecution):
+        userspacegen.gather_target_repositories(None, indata)
+    reports = [m.report for m in mocked_produce.model_instances if isinstance(m, reporting.Report)]
+    inhibitors = [m for m in reports if 'inhibitor' in m.get('groups', ())]
+    assert len(inhibitors) == 1
+    assert inhibitors[0].get('title', '') == 'Cannot find required basic RHEL target repositories.'
+    mocked_produce = produce_mocked()
+    monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked())
+    monkeypatch.setattr(userspacegen.api.current_actor(), 'produce', mocked_produce)
+    monkeypatch.setattr(rhsm, 'get_available_repo_ids', lambda x: ['repoidA', 'repoidB', 'repoidC-baseos'])
+    monkeypatch.setattr(userspacegen.api, 'consume', lambda x: iter([models.TargetRepositories(
+        rhel_repos=[models.RHELTargetRepository(repoid='repoidC-baseos'),
+                    models.RHELTargetRepository(repoid='repoidA')],
+        custom_repos=[models.CustomTargetRepository(repoid='repoidCustom')])]))
+    with pytest.raises(StopActorExecution):
+        userspacegen.gather_target_repositories(None, indata)
+    reports = [m.report for m in mocked_produce.model_instances if isinstance(m, reporting.Report)]
+    inhibitors = [m for m in reports if 'inhibitor' in m.get('groups', ())]
+    assert len(inhibitors) == 1
+    assert inhibitors[0].get('title', '') == 'Cannot find required basic RHEL target repositories.'
 
 
 def mocked_consume_data():
@@ -373,5 +1222,5 @@ def test_perform_ok(monkeypatch):
     assert userspacegen.api.produce.called == 3
     assert isinstance(userspacegen.api.produce.model_instances[0], models.TMPTargetRepositoriesFacts)
     assert userspacegen.api.produce.model_instances[1] == msg_target_repos
-    # this one is full of contants, so it's safe to check just the instance
+    # this one is full of constants, so it's safe to check just the instance
     assert isinstance(userspacegen.api.produce.model_instances[2], models.TargetUserSpaceInfo)

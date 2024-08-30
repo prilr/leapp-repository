@@ -1,5 +1,6 @@
 ﻿import json
 from collections import defaultdict
+from leapp.models import PESIDRepositoryEntry, RepoMapEntry, RepositoriesMapping
 
 from leapp.exceptions import StopActorExecutionError
 from leapp.libraries.common.fetch import read_or_fetch
@@ -28,7 +29,7 @@ def read_repofile(repofile, directory="/etc/leapp/files"):
 
 
 class RepoMapData(object):
-    VERSION_FORMAT = '1.0.0'
+    VERSION_FORMAT = '1.2.0'
 
     def __init__(self):
         self.repositories = []
@@ -145,3 +146,22 @@ class RepoMapData(object):
                     target_pesid=entry['target'],
                 )
         return repomap
+
+def combine_repomap_messages(mapping_list):
+    """
+    Combine multiple RepositoryMapping messages into one.
+    Needed because we might get more than one message if there are vendors present.
+    """
+    combined_mapping = []
+    combined_repositories = []
+    # Depending on whether there are any vendors present, we might get more than one message.
+    for msg in mapping_list:
+        combined_mapping.extend(msg.mapping)
+        combined_repositories.extend(msg.repositories)
+
+    combined_repomapping = RepositoriesMapping(
+        mapping=combined_mapping,
+        repositories=combined_repositories
+    )
+
+    return combined_repomapping

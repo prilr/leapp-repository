@@ -1,12 +1,6 @@
-from leapp.models import (
-    DaemonList,
-    InstalledRedHatSignedRPM,
-    RPM,
-    SendmailMigrationDecision,
-    TcpWrappersFacts,
-)
+from leapp.models import DaemonList, DistributionSignedRPM, RPM, SendmailMigrationDecision, TcpWrappersFacts
 from leapp.reporting import Report
-
+from leapp.utils.report import is_inhibitor
 
 RH_PACKAGER = 'Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>'
 
@@ -24,7 +18,7 @@ without_sendmail = [
 
 
 def create_modulesfacts(installed_rpm):
-    return InstalledRedHatSignedRPM(items=installed_rpm)
+    return DistributionSignedRPM(items=installed_rpm)
 
 
 def test_actor_without_sendmail_package(current_actor_context):
@@ -41,4 +35,4 @@ def test_actor_with_tcp_wrappers(current_actor_context):
     current_actor_context.feed(tcpwrap_facts)
     current_actor_context.run()
     report_fields = current_actor_context.consume(Report)[0].report
-    assert 'inhibitor' in report_fields['flags']
+    assert is_inhibitor(report_fields)

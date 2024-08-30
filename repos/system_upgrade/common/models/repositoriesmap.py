@@ -1,4 +1,4 @@
-from leapp.models import Model, fields
+from leapp.models import fields, Model
 from leapp.topics import TransactionTopic
 
 
@@ -61,7 +61,7 @@ class PESIDRepositoryEntry(Model):
     too.
     """
 
-    channel = fields.StringEnum(['ga', 'tuv', 'e4s', 'eus', 'aus', 'beta'])
+    channel = fields.StringEnum(['ga', 'e4s', 'eus', 'aus', 'beta'])
     """
     The 'channel' of the repository.
 
@@ -71,12 +71,11 @@ class PESIDRepositoryEntry(Model):
     purposes. The other channels indicate premium repositories.
     """
 
-    rhui = fields.StringEnum(['', 'aws', 'azure'])
+    rhui = fields.StringEnum(['', 'aws', 'azure', 'google', 'alibaba'])
     """
-    Indicate whether the repository is deliver for RHUI and which one.
+    Specifies what cloud provider (RHUI) is the repository specific to.
 
-    For non-rhui systems: empty string
-    For AWS or Azure: 'aws' / 'azure'
+    Empty string denotes that the repository is not specific to any cloud provider.
     """
 
 

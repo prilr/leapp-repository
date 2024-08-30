@@ -9,7 +9,6 @@ from leapp.libraries.common.config import get_env
 from leapp.libraries.common.config.version import get_target_major_version
 from leapp.libraries.stdlib import api, CalledProcessError, run
 
-
 OVERLAY_DO_NOT_MOUNT = ('tmpfs', 'devtmpfs', 'devpts', 'sysfs', 'proc', 'cramfs', 'sysv', 'vfat')
 
 # NOTE(pstodulk): what about using more closer values and than just multiply
@@ -702,7 +701,7 @@ def _prepare_required_mounts_old(scratch_dir, mounts_dir, mount_points, xfs_info
     space_needed = _overlay_disk_size_old() * xfs_noftype_mounts
     disk_images_directory = os.path.join(scratch_dir, 'diskimages')
 
-    # Ensure we cleanup old disk images before we check for space contraints.
+    # Ensure we cleanup old disk images before we check for space constraints.
     run(['rm', '-rf', disk_images_directory])
     _create_diskimages_dir_old(scratch_dir, disk_images_directory)
     _ensure_enough_diskimage_space_old(space_needed, scratch_dir, xfs_noftype_mounts)

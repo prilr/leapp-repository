@@ -1,6 +1,12 @@
+from leapp.models import (
+    DistributionSignedRPM,
+    RepositoriesFacts,
+    RepositoryData,
+    RepositoryFile,
+    RPM,
+    UsedRepositories
+)
 from leapp.snactor.fixture import current_actor_context
-from leapp.models import RPM, InstalledRedHatSignedRPM, RepositoryFile, RepositoryData, \
-    RepositoriesFacts, UsedRepositories
 
 
 def get_sample_rpm(name, repository):
@@ -16,7 +22,7 @@ def get_sample_rpm(name, repository):
 
 
 def get_sample_installed_pkgs(pkgs):
-    return InstalledRedHatSignedRPM(items=[get_sample_rpm(*p) for p in pkgs])
+    return DistributionSignedRPM(items=[get_sample_rpm(*p) for p in pkgs])
 
 
 def get_sample_repository(repoid, name):

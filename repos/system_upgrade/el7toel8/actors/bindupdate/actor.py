@@ -1,17 +1,17 @@
 from leapp.actors import Actor
 from leapp.libraries.actor import updates
 from leapp.libraries.common import rpms
-from leapp.models import BindFacts, InstalledRedHatSignedRPM
+from leapp.models import BindFacts, DistributionSignedRPM
 from leapp.tags import IPUWorkflowTag, PreparationPhaseTag
 
 
 class BindUpdate(Actor):
     """
-    Actor parsing facts found in configuration and modifing configuration.
+    Actor parsing facts found in configuration and modifying configuration.
     """
 
     name = 'bind_update'
-    consumes = (InstalledRedHatSignedRPM, BindFacts)
+    consumes = (DistributionSignedRPM, BindFacts)
     produces = ()
     tags = (PreparationPhaseTag, IPUWorkflowTag)
 
@@ -20,7 +20,7 @@ class BindUpdate(Actor):
     def has_bind_package(self):
         """Test any bind server package is installed."""
         for pkg in self.pkg_names:
-            if rpms.has_package(InstalledRedHatSignedRPM, pkg):
+            if rpms.has_package(DistributionSignedRPM, pkg):
                 return True
         return False
 

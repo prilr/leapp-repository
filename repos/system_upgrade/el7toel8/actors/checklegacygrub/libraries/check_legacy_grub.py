@@ -28,13 +28,7 @@ def has_legacy_grub(device):
 
 def check_grub_disks_for_legacy_grub():
     # Both GRUB2 and Grub Legacy are recognized by `get_grub_devices`
-    # oshyshatskyi: newer versions of leapp support multiple grub devices e.g. for raid
-    # because our version does not support that, we always check only one device
-    # https://github.com/oamg/leapp-repository/commit/2ba44076625e35aabfd2a1f9e45b2934f99f1e8d
-    grub_device = grub_lib.get_grub_device()
-    grub_devices = []
-    if grub_device:
-        grub_devices.append(grub_device)
+    grub_devices = grub_lib.get_grub_devices()
 
     legacy_grub_devices = []
     for device in grub_devices:
@@ -69,9 +63,9 @@ def check_grub_disks_for_legacy_grub():
             reporting.Title("GRUB Legacy is used on the system"),
             reporting.Summary(details.format(block_devices_fmt=block_devices_fmt)),
             reporting.Severity(reporting.Severity.HIGH),
-            reporting.Tags([reporting.Tags.BOOT]),
+            reporting.Groups([reporting.Groups.BOOT]),
             reporting.Remediation(hint=hint),
-            reporting.Flags([reporting.Flags.INHIBITOR]),
+            reporting.Groups([reporting.Groups.INHIBITOR]),
             reporting.ExternalLink(url=MIGRATION_TO_GRUB2_GUIDE_URL,
                                    title='How to install GRUB2 after a RHEL6 to RHEL7 upgrade'),
         ])

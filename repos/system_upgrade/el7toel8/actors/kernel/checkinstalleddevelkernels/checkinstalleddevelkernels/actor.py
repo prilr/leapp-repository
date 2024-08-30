@@ -1,8 +1,8 @@
 from leapp.actors import Actor
-from leapp.models import InstalledRedHatSignedRPM
-from leapp.tags import IPUWorkflowTag, ChecksPhaseTag
-from leapp.reporting import Report
 from leapp.libraries.actor import checkinstalleddevelkernels
+from leapp.models import DistributionSignedRPM
+from leapp.reporting import Report
+from leapp.tags import ChecksPhaseTag, IPUWorkflowTag
 
 
 class CheckInstalledDevelKernels(Actor):
@@ -15,7 +15,7 @@ class CheckInstalledDevelKernels(Actor):
     """
 
     name = 'check_installed_devel_kernels'
-    consumes = (InstalledRedHatSignedRPM,)
+    consumes = (DistributionSignedRPM,)
     produces = (Report,)
     tags = (IPUWorkflowTag, ChecksPhaseTag)
 

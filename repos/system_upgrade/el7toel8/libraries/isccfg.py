@@ -2,6 +2,8 @@
 #
 # Simplified parsing of bind configuration, with include support and nested sections.
 
+from __future__ import print_function
+
 import re
 import string
 
@@ -51,7 +53,7 @@ class ConfigFile(object):
 
 
 class MockConfig(ConfigFile):
-    """Configuration file with contens defined on constructor.
+    """Configuration file with contents defined on constructor.
 
        Intended for testing the library.
     """
@@ -501,7 +503,7 @@ class IscConfigParser(object):
         choose the first one.
 
         The function would be confusing in case of brackets, but content between
-        brackets is not evaulated as new tokens.
+        brackets is not evaluated as new tokens.
         E.g.:
 
         "find { me };"      : 5
@@ -630,7 +632,7 @@ class IscConfigParser(object):
         :param index: start searching from the index
         :param end_index: stop searching at the end_index or end of the string
 
-        Funtion is not recursive. Searched key has to be in the current scope.
+        Function is not recursive. Searched key has to be in the current scope.
         Attention:
 
         In case that input string contains data outside of section by mistake,
@@ -686,8 +688,11 @@ class IscConfigParser(object):
 
         while index != -1:
             keystart = index
-            while istr[index] in self.CHAR_KEYWORD and index < end_index:
+            while index < end_index and istr[index] in self.CHAR_KEYWORD:
                 index += 1
+
+            if index >= end_index:
+                break
 
             if keystart < index <= end_index and istr[index] not in self.CHAR_KEYWORD:
                 # key has been found
@@ -948,3 +953,31 @@ class IscConfigParser(object):
         self.load_main_config()
         self.load_included_files()
     pass
+
+
+if __name__ == '__main__':
+    """Run parser to default path or path in the first argument.
+
+    Additional parameters are statements or blocks to print.
+    Defaults to options and zone.
+    """
+
+    from sys import argv
+
+    def print_cb(section, state):
+        print(section)
+
+    cfgpath = IscConfigParser.CONFIG_FILE
+    if len(argv) > 1:
+        cfgpath = argv[1]
+    if len(argv) > 2:
+        cb = {}
+        for key in argv[2:]:
+            cb[key] = print_cb
+    else:
+        cb = {'options': print_cb, 'zone': print_cb}
+
+    parser = IscConfigParser(cfgpath)
+    for section in parser.FILES_TO_CHECK:
+        print("# Walking file '{}'".format(section.path))
+        parser.walk(section.root_section(), cb)

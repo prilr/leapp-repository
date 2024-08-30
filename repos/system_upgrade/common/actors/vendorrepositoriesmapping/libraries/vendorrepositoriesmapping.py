@@ -1,14 +1,34 @@
 import os
+import json
 
+from leapp.libraries.common import fetch
 from leapp.libraries.common.config.version import get_target_major_version, get_source_major_version
 from leapp.libraries.common.repomaputils import RepoMapData, read_repofile, inhibit_upgrade
 from leapp.libraries.stdlib import api
 from leapp.models import VendorSourceRepos, RepositoriesMapping
 from leapp.models.fields import ModelViolationError
+from leapp.exceptions import StopActorExecutionError
 
 
 VENDORS_DIR = "/etc/leapp/files/vendors.d"
 """The folder containing the vendor repository mapping files."""
+
+
+def inhibit_upgrade(msg):
+    raise StopActorExecutionError(
+        msg,
+        details={'hint': ('Read documentation at the following link for more'
+                          ' information about how to retrieve the valid file:'
+                          ' https://access.redhat.com/articles/3664871')})
+
+
+def read_repofile(repofile, repodir):
+    try:
+        return json.loads(fetch.read_or_fetch(repofile, directory=repodir, allow_download=False))
+    except ValueError:
+        # The data does not contain a valid json
+        inhibit_upgrade('The repository mapping file is invalid: file does not contain a valid JSON object.')
+    return None
 
 
 def read_repomap_file(repomap_file, read_repofile_func, vendor_name):

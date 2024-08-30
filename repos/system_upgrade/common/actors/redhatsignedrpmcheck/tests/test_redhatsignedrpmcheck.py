@@ -1,8 +1,8 @@
 from leapp import reporting
 from leapp.libraries.actor import redhatsignedrpmcheck
-from leapp.libraries.common.testutils import produce_mocked, create_report_mocked
+from leapp.libraries.common.testutils import create_report_mocked, produce_mocked
 from leapp.libraries.stdlib import api
-from leapp.models import RPM, InstalledUnsignedRPM
+from leapp.models import InstalledUnsignedRPM, RPM
 
 RH_PACKAGER = 'Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>'
 
@@ -44,4 +44,4 @@ def test_actor_execution_with_unsigned_data(monkeypatch):
     assert len(packages) == 4
     redhatsignedrpmcheck.generate_report(packages)
     assert reporting.create_report.called == 1
-    assert 'Packages not signed by Red Hat found' in reporting.create_report.report_fields['title']
+    assert 'Packages not signed by a known packager found on the system' in reporting.create_report.report_fields['title']

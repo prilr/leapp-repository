@@ -1,7 +1,7 @@
-from leapp.actors import Actor
-from leapp.models import InstalledRedHatSignedRPM
-from leapp.reporting import Report, create_report
 from leapp import reporting
+from leapp.actors import Actor
+from leapp.models import DistributionSignedRPM
+from leapp.reporting import create_report, Report
 from leapp.tags import ChecksPhaseTag, IPUWorkflowTag
 
 
@@ -11,12 +11,12 @@ class CheckPostfix(Actor):
     """
 
     name = 'check_postfix'
-    consumes = (InstalledRedHatSignedRPM,)
+    consumes = (DistributionSignedRPM,)
     produces = (Report,)
     tags = (ChecksPhaseTag, IPUWorkflowTag)
 
     def process(self):
-        for fact in self.consume(InstalledRedHatSignedRPM):
+        for fact in self.consume(DistributionSignedRPM):
             for rpm in fact.items:
                 if rpm.name == 'postfix':
                     create_report([
@@ -60,7 +60,7 @@ class CheckPostfix(Actor):
                             'map to work, the postfix-pgsql RPM package has to be installed.\n',
                         ),
                         reporting.Severity(reporting.Severity.LOW),
-                        reporting.Tags([reporting.Tags.SERVICES, reporting.Tags.EMAIL]),
+                        reporting.Groups([reporting.Groups.SERVICES, reporting.Groups.EMAIL]),
                         reporting.RelatedResource('package', 'postfix')
                     ])
                     return

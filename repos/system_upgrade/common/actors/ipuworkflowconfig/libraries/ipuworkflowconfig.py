@@ -51,8 +51,12 @@ def get_os_release(path):
     try:
         with open(path) as f:
             data = dict(l.strip().split('=', 1) for l in f.readlines() if '=' in l)
+            release_id = data.get('ID', '').strip('"')
+            version_id = data.get('VERSION_ID', '').strip('"')
+            if release_id == 'centos' and '.' not in os_version:
+                os_version = "{}.999".format(version_id)
             return OSRelease(
-                release_id=data.get('ID', '').strip('"'),
+                release_id=release_id,
                 name=data.get('NAME', '').strip('"'),
                 pretty_name=data.get('PRETTY_NAME', '').strip('"'),
                 version=data.get('VERSION', '').strip('"'),
@@ -69,6 +73,7 @@ def produce_ipu_config(actor):
     flavour = os.environ.get('LEAPP_UPGRADE_PATH_FLAVOUR')
     target_version = os.environ.get('LEAPP_UPGRADE_PATH_TARGET_RELEASE')
     os_release = get_os_release('/etc/os-release')
+
     actor.produce(IPUConfig(
         leapp_env_vars=get_env_vars(),
         os_release=os_release,

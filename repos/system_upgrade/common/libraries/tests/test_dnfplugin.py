@@ -5,6 +5,8 @@ import pytest
 import leapp.models
 from leapp.libraries.common import dnfplugin
 from leapp.libraries.common.config.version import get_major_version
+from leapp.libraries.common.testutils import CurrentActorMocked
+from leapp.libraries.stdlib import api
 from leapp.models.fields import Boolean
 from leapp.topics import Topic
 
@@ -20,6 +22,10 @@ TaskData = namedtuple('TaskData', 'expected initdata')
 TEST_INSTALL_PACKAGES = TaskData(
     expected=('install1', 'install2'),
     initdata=('install1', 'install2')
+)
+TEST_REINSTALL_PACKAGES = TaskData(
+    expected=('reinstall1', 'reinstall1'),
+    initdata=('reinstall1', 'reinstall2')
 )
 TEST_REMOVE_PACKAGES = TaskData(
     expected=('remove1', 'remove2'),
@@ -42,6 +48,7 @@ class DATADnfPluginDataPkgsInfo(leapp.models.Model):
     topic = DATADnfPluginDataTopic
     local_rpms = fields.List(fields.String())
     to_install = fields.List(fields.StringEnum(choices=TEST_INSTALL_PACKAGES.expected))
+    to_reinstall = fields.List(fields.StringEnum(choices=TEST_REINSTALL_PACKAGES.expected))
     to_remove = fields.List(fields.StringEnum(choices=TEST_REMOVE_PACKAGES.expected))
     to_upgrade = fields.List(fields.StringEnum(choices=TEST_UPGRADE_PACKAGES.expected))
     modules_to_enable = fields.List(fields.StringEnum(choices=TEST_ENABLE_MODULES.expected))
@@ -61,7 +68,7 @@ class DATADnfPluginDataDnfConf(leapp.models.Model):
     debugsolver = fields.Boolean()
     disable_repos = BooleanEnum(choices=[True])
     enable_repos = fields.List(fields.StringEnum(choices=TEST_ENABLE_REPOS_CHOICES))
-    gpgcheck = BooleanEnum(choices=[False])
+    gpgcheck = fields.Boolean()
     platform_id = fields.StringEnum(choices=['platform:el8', 'platform:el9'])
     releasever = fields.String()
     installroot = fields.StringEnum(choices=['/installroot'])
@@ -94,16 +101,6 @@ del leapp.models.DATADnfPluginDataRHUIAWS
 del leapp.models.DATADnfPluginData
 
 
-def _mocked_get_target_major_version(version):
-    def impl():
-        return version
-    return impl
-
-
-def _mocked_api_get_file_path(name):
-    return 'some/random/file/path/{}'.format(name)
-
-
 _CONFIG_BUILD_TEST_DEFINITION = (
     #   Parameter, Input Data, Expected Fields with data
     ('debug', False, ('dnf_conf', 'debugsolver'), False),
@@ -131,9 +128,7 @@ def test_build_plugin_data_variations(
     expected_value,
 ):
     used_target_major_version = get_major_version(used_target_version)
-    monkeypatch.setattr(dnfplugin, 'get_target_version', _mocked_get_target_major_version(used_target_version))
-    monkeypatch.setattr(dnfplugin, 'get_target_major_version',
-                        _mocked_get_target_major_version(used_target_major_version))
+    monkeypatch.setattr(api, 'current_actor', CurrentActorMocked(dst_ver=used_target_version))
     inputs = {
         'target_repoids': ['BASEOS', 'APPSTREAM'],
         'debug': True,
@@ -143,6 +138,7 @@ def test_build_plugin_data_variations(
             to_install=TEST_INSTALL_PACKAGES.initdata,
             to_remove=TEST_REMOVE_PACKAGES.initdata,
             to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+            to_reinstall=[],
             modules_to_enable=TEST_ENABLE_MODULES.initdata
             )
     }
@@ -161,8 +157,7 @@ def test_build_plugin_data_variations(
 
 
 def test_build_plugin_data(monkeypatch):
-    monkeypatch.setattr(dnfplugin, 'get_target_version', _mocked_get_target_major_version('8.4'))
-    monkeypatch.setattr(dnfplugin, 'get_target_major_version', _mocked_get_target_major_version('8'))
+    monkeypatch.setattr(api, 'current_actor', CurrentActorMocked(dst_ver='8.4'))
     # Use leapp to validate format and data
     created = DATADnfPluginData.create(
         dnfplugin.build_plugin_data(
@@ -174,6 +169,7 @@ def test_build_plugin_data(monkeypatch):
                 to_install=TEST_INSTALL_PACKAGES.initdata,
                 to_remove=TEST_REMOVE_PACKAGES.initdata,
                 to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+                to_reinstall=[],
                 modules_to_enable=TEST_ENABLE_MODULES.initdata
                 )
             )
@@ -193,6 +189,7 @@ def test_build_plugin_data(monkeypatch):
                     to_install=TEST_INSTALL_PACKAGES.initdata,
                     to_remove=TEST_REMOVE_PACKAGES.initdata,
                     to_upgrade=TEST_UPGRADE_PACKAGES.initdata,
+                    to_reinstall=[],
                     # Enforcing the failure
                     modules_to_enable=(
                         leapp.models.Module(

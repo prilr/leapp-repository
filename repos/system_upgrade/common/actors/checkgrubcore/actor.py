@@ -1,26 +1,25 @@
-from leapp.actors import Actor
-from leapp.libraries.common.config import architecture
-from leapp.models import FirmwareFacts, GrubDevice, UpdateGrub
-from leapp.reporting import Report, create_report
 from leapp import reporting
+from leapp.actors import Actor
+from leapp.exceptions import StopActorExecutionError
+from leapp.libraries.common.config import architecture
+from leapp.models import FirmwareFacts, GrubInfo
+from leapp.reporting import create_report, Report
 from leapp.tags import ChecksPhaseTag, IPUWorkflowTag
-from leapp.utils.deprecation import suppress_deprecation
+
+GRUB_SUMMARY = ('On legacy (BIOS) systems, GRUB2 core (located in the gap between the MBR and the '
+                'first partition) cannot be updated during the rpm transaction and Leapp has to initiate '
+                'the update running "grub2-install" after the transaction. No action is needed before the '
+                'upgrade. After the upgrade, it is recommended to check the GRUB configuration.')
 
 
-GRUB_SUMMARY = ('On legacy (BIOS) systems, GRUB core (located in the gap between the MBR and the '
-                'first partition) does not get automatically updated when GRUB is upgraded.')
-
-
-# TODO: remove this actor completely after the deprecation period expires
-@suppress_deprecation(GrubDevice, UpdateGrub)
 class CheckGrubCore(Actor):
     """
     Check whether we are on legacy (BIOS) system and instruct Leapp to upgrade GRUB core
     """
 
     name = 'check_grub_core'
-    consumes = (FirmwareFacts, GrubDevice)
-    produces = (Report, UpdateGrub)
+    consumes = (FirmwareFacts, GrubInfo)
+    produces = (Report,)
     tags = (ChecksPhaseTag, IPUWorkflowTag)
 
     def process(self):
@@ -30,31 +29,28 @@ class CheckGrubCore(Actor):
 
         ff = next(self.consume(FirmwareFacts), None)
         if ff and ff.firmware == 'bios':
-            dev = next(self.consume(GrubDevice), None)
-            if dev:
-                self.produce(UpdateGrub(grub_device=dev.grub_device))
+            grub_info = next(self.consume(GrubInfo), None)
+            if not grub_info:
+                raise StopActorExecutionError('Actor did not receive any GrubInfo message.')
+            if grub_info.orig_devices:
                 create_report([
                     reporting.Title(
-                        'GRUB core will be updated during upgrade'
+                        'GRUB2 core will be automatically updated during the upgrade'
                     ),
                     reporting.Summary(GRUB_SUMMARY),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([reporting.Tags.BOOT]),
+                    reporting.Groups([reporting.Groups.BOOT]),
                 ])
             else:
                 create_report([
-                    reporting.Title('Leapp could not identify where GRUB core is located'),
+                    reporting.Title('Leapp could not identify where GRUB2 core is located'),
                     reporting.Summary(
                         'We assumed GRUB2 core is located on the same device(s) as /boot, '
-                        'however Leapp could not detect GRUB2 on those device(s). '
-                        'This means GRUB2 core will not be updated during the upgrade process and '
-                        'the system will probably ' 'boot into the old kernel after the upgrade. '
-                        'GRUB2 core needs to be updated manually on legacy (BIOS) systems to '
-                        'fix this.'
+                        'however Leapp could not detect GRUB2 on the device(s). '
+                        'GRUB2 core needs to be updated maually on legacy (BIOS) systems. '
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([reporting.Tags.BOOT]),
+                    reporting.Groups([reporting.Groups.BOOT]),
                     reporting.Remediation(
-                        hint='Please run the "grub2-install <GRUB_DEVICE>" command manually '
-                        'after the upgrade'),
+                        hint='Please run "grub2-install <GRUB_DEVICE> command manually after the upgrade'),
                 ])

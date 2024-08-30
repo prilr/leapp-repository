@@ -17,6 +17,11 @@ def _get_lscpu_output():
     return ''
 
 
+def _get_cpu_flags(lscpu):
+    flags = lscpu.get('Flags', '')
+    return flags.split()
+
+
 def _get_cpu_entries_for(arch_prefix):
     result = []
     for message in api.consume(DeviceDriverDeprecationData):
@@ -128,7 +133,7 @@ def _find_deprecation_data_entries(lscpu):
             if is_detected(lscpu, entry)
         ]
 
-    api.current_logger().warn('Unsupported platform could not detect relevant CPU information')
+    api.current_logger().warning('Unsupported platform could not detect relevant CPU information')
     return []
 
 
@@ -137,4 +142,10 @@ def process():
     api.produce(*_find_deprecation_data_entries(lscpu))
     # Backwards compatibility
     machine_type = lscpu.get('Machine type')
-    api.produce(CPUInfo(machine_type=int(machine_type) if machine_type else None))
+    flags = _get_cpu_flags(lscpu)
+    api.produce(
+            CPUInfo(
+                machine_type=int(machine_type) if machine_type else None,
+                flags=flags
+                )
+            )

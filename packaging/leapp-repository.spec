@@ -2,7 +2,7 @@
 %global repositorydir %{leapp_datadir}/repositories
 %global custom_repositorydir %{leapp_datadir}/custom-repositories
 
-%define leapp_repo_deps  6
+%define leapp_repo_deps  10
 
 %if 0%{?rhel} == 7
     %define leapp_python_sitelib %{python2_sitelib}
@@ -41,8 +41,8 @@ py2_byte_compile "%1" "%2"}
 # RHEL 8+ packages to be consistent with other leapp projects in future.
 
 Name:           leapp-repository
-Version:        0.16.0
-Release:        10%{?dist}.cloudlinux
+Version:        0.20.0
+Release:        1%{?dist}.cloudlinux
 Summary:        Repositories for leapp
 
 License:        ASL 2.0
@@ -52,6 +52,10 @@ Source1:        deps-pkgs.tar.gz
 
 # NOTE: Our packages must be noarch. Do no drop this in any way.
 BuildArch:      noarch
+
+### PATCHES HERE
+# Patch0001:    filename.patch
+
 
 %description
 %{summary}
@@ -70,7 +74,7 @@ Requires:       python2-leapp
 Obsoletes:      leapp-repository-data <= 0.6.1
 Provides:       leapp-repository-data <= 0.6.1
 
-# Former leapp subpackage that is part of the sos package since HEL 7.8
+# Former leapp subpackage that is part of the sos package since RHEL 7.8
 Obsoletes:      leapp-repository-sos-plugin <= 0.9.0
 
 # Set the conflict to be sure this RPM is not upgraded automatically to
@@ -90,17 +94,21 @@ Conflicts:      leapp-upgrade-el7toel8
 
 %endif
 
-# IMPORTANT: everytime the requirements are changed, increment number by one
+# IMPORTANT: every time the requirements are changed, increment number by one
 # - same for Provides in deps subpackage
 Requires:       leapp-repository-dependencies = %{leapp_repo_deps}
 
 # IMPORTANT: this is capability provided by the leapp framework rpm.
 # Check that 'version' instead of the real framework rpm version.
-Requires:       leapp-framework >= 2.2
+Requires:       leapp-framework >= 5.0, leapp-framework < 6
 
 # Since we provide sub-commands for the leapp utility, we expect the leapp
 # tool to be installed as well.
 Requires:       leapp
+
+# Used to determine RHEL version of a given target RHEL installation image -
+# uncompressing redhat-release package from the ISO.
+Requires:   cpio
 
 # The leapp-repository rpm is renamed to %%{lpr_name}
 Obsoletes:      leapp-repository < 0.14.0-%{release}
@@ -110,13 +118,21 @@ Provides:       leapp-repository = %{version}-%{release}
 # to install "leapp-upgrade" in the official docs.
 Provides:       leapp-upgrade = %{version}-%{release}
 
+# Provide leapp-commands so the framework could refer to them when customers
+# do not have installed particular leapp-repositories
+Provides:       leapp-command(answer)
+Provides:       leapp-command(preupgrade)
+Provides:       leapp-command(upgrade)
+Provides:       leapp-command(rerun)
+Provides:       leapp-command(list-runs)
+
 
 %description -n %{lpr_name}
 Leapp repositories for the in-place upgrade to the next major version
 of the Red Hat Enterprise Linux system.
 
 
-# This metapackage should contain all RPM dependencies exluding deps on *leapp*
+# This metapackage should contain all RPM dependencies excluding deps on *leapp*
 # RPMs. This metapackage will be automatically replaced during the upgrade
 # to satisfy dependencies with RPMs from target system.
 %package -n %{lpr_name}-deps
@@ -125,7 +141,7 @@ Summary:    Meta-package with system dependencies of %{lpr_name} package
 # The package has been renamed, so let's obsoletes the old one
 Obsoletes:      leapp-repository-deps < 0.14.0-%{release}
 
-# IMPORTANT: everytime the requirements are changed, increment number by one
+# IMPORTANT: every time the requirements are changed, increment number by one
 # - same for Requires in main package
 Provides:  leapp-repository-dependencies = %{leapp_repo_deps}
 ##################################################
@@ -133,6 +149,16 @@ Provides:  leapp-repository-dependencies = %{leapp_repo_deps}
 ##################################################
 Requires:   dnf >= 4
 Requires:   pciutils
+
+# required to be able to format disk images with XFS file systems (default)
+Requires:   xfsprogs
+
+# required to be able to format disk images with Ext4 file systems
+# NOTE: this is not happening by default, but we can expact that many customers
+# will want to / need to do this - especially on RHEL 7 now. Adding this deps
+# as the best trade-off to resolve this problem.
+Requires:   e2fsprogs
+
 %if 0%{?rhel} && 0%{?rhel} == 7
 # Required to gather system facts about SELinux
 Requires:   libselinux-python
@@ -153,6 +179,18 @@ Requires:   python3-requests
 Requires:   python3-six
 # required by SELinux actors
 Requires:   policycoreutils-python-utils
+# required by systemfacts, and several other actors
+Requires:   procps-ng
+Requires:   kmod
+# since RHEL 8+ dracut does not have to be present on the system all the time
+# and missing dracut could be killing situation for us :)
+Requires:   dracut
+
+# Required to scan NetworkManagerConnection (e.g. to recognize secrets)
+# NM is requested to be used on RHEL 8+ systems
+Requires:   NetworkManager-libnm
+Requires:   python3-gobject-base
+
 %endif
 ##################################################
 # end requirement
@@ -167,12 +205,15 @@ Requires:   policycoreutils-python-utils
 %setup -n %{name}-%{version}
 %setup -q  -n %{name}-%{version} -D -T -a 1
 
+# APPLY PATCHES HERE
+# %%patch0001 -p1
+
 
 %build
 %if 0%{?rhel} == 7
-cp -a leapp*deps-el8*rpm repos/system_upgrade/el7toel8/files/bundled-rpms/
+cp -a leapp*deps*el8.noarch.rpm repos/system_upgrade/el7toel8/files/bundled-rpms/
 %else
-cp -a leapp*deps-el9*rpm repos/system_upgrade/el8toel9/files/bundled-rpms/
+cp -a leapp*deps*el9.noarch.rpm repos/system_upgrade/el8toel9/files/bundled-rpms/
 %endif
 
 

@@ -50,7 +50,7 @@ class DetectControlPanel(Actor):
                         " Detected panel: {}.".format(panel.name)
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([reporting.Tags.OS_FACTS]),
-                    reporting.Flags([reporting.Flags.INHIBITOR]),
+                    reporting.Groups([reporting.Groups.OS_FACTS]),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
                 ]
             )

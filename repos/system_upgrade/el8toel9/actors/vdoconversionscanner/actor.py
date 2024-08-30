@@ -1,6 +1,6 @@
 from leapp.actors import Actor
 from leapp.libraries.actor import vdoconversionscanner
-from leapp.models import InstalledRedHatSignedRPM, StorageInfo, VdoConversionInfo
+from leapp.models import DistributionSignedRPM, StorageInfo, VdoConversionInfo
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
 
 
@@ -10,7 +10,7 @@ class VdoConversionScanner(Actor):
 
     A VdoConversionInfo message containing the data will be produced.
 
-    In RHEL 9.0 the indepdent VDO management software, `vdo manager`, is
+    In RHEL 9.0 the independent VDO management software, `vdo manager`, is
     superseded by LVM management.  Existing VDOs must be converted to LVM-based
     management *before* upgrading to RHEL 9.0.
 
@@ -59,7 +59,7 @@ class VdoConversionScanner(Actor):
     """
 
     name = 'vdo_conversion_scanner'
-    consumes = (InstalledRedHatSignedRPM, StorageInfo)
+    consumes = (DistributionSignedRPM, StorageInfo)
     produces = (VdoConversionInfo,)
     tags = (IPUWorkflowTag, FactsPhaseTag)
 

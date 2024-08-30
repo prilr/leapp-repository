@@ -45,7 +45,7 @@ class NetworkManagerUpdateConnections(Actor):
                         reporting.Title(title),
                         reporting.Summary(summary),
                         reporting.Severity(reporting.Severity.MEDIUM),
-                        reporting.Tags([reporting.Tags.NETWORK])
+                        reporting.Groups([reporting.Groups.NETWORK])
                     ])
 
             break

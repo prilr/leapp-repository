@@ -41,6 +41,6 @@ class RestoreMySqlData(Actor):
                     reporting.Title(title),
                     reporting.Summary(summary),
                     reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Tags([reporting.Tags.UPGRADE_PROCESS]),
+                    reporting.Groups([reporting.Groups.UPGRADE_PROCESS]),
                 ]
             )

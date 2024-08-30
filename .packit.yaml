@@ -8,6 +8,9 @@ downstream_package_name: leapp-repository
 upstream_tag_template: 'v{version}'
 merge_pr_in_ci: false
 
+srpm_build_deps:
+- make
+
 # This is just for the build from the CLI - all other builds for jobs use own
 # actions
 actions:
@@ -81,3 +84,627 @@ jobs:
     post-upstream-clone:
     # builds from master branch should start with 100 release, to have high priority
     - bash -c "sed -i \"s/1%{?dist}/100%{?dist}/g\" packaging/leapp-repository.spec"
+
+- &sanity-79to86
+  job: tests
+  fmf_url: "https://gitlab.cee.redhat.com/oamg/leapp-tests"
+  fmf_ref: "main"
+  use_internal_tf: True
+  trigger: pull_request
+  labels:
+    - sanity
+  targets:
+    epel-7-x86_64:
+      distros: [RHEL-7.9-ZStream]
+  identifier: sanity-7.9to8.6
+  tmt_plan: ""
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:sanity & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-7.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.6"
+    LEAPPDATA_BRANCH: "upstream"
+
+- &sanity-79to86-aws
+  <<: *sanity-79to86
+  labels:
+    - sanity
+    - aws
+  targets:
+    epel-7-x86_64:
+      distros: [RHEL-7.9-rhui]
+  identifier: sanity-7.9to8.6-aws
+  # NOTE(ivasilev) Unfortunately to use yaml templates we need to rewrite the whole tf_extra_params dict
+  # to use plan_filter (can't just specify one section test.tmt.plan_filter, need to specify environments.* as well)
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:upgrade_happy_path & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-7.9"
+        settings:
+          provisioning:
+            post_install_script: "#!/bin/sh\nsudo sed -i s/.*ssh-rsa/ssh-rsa/ /root/.ssh/authorized_keys; yum-config-manager --enable rhel-7-server-rhui-optional-rpms"
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.6"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui
+
+- &sanity-79to88-aws
+  <<: *sanity-79to86-aws
+  identifier: sanity-7.9to8.8-aws
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.8"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui
+
+- &sanity-79to89-aws
+  <<: *sanity-79to86-aws
+  identifier: sanity-7.9to8.9-aws
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.9"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui
+
+# NOTE(mkluson) RHEL 8.10 content is not publicly available (via RHUI)
+#- &sanity-79to810-aws
+#  <<: *sanity-79to86-aws
+#  identifier: sanity-7.9to8.10-aws
+#  env:
+#    SOURCE_RELEASE: "7.9"
+#    TARGET_RELEASE: "8.10"
+#    RHUI: "aws"
+#    LEAPPDATA_BRANCH: "upstream"
+#    LEAPP_NO_RHSM: "1"
+#    USE_CUSTOM_REPOS: rhui
+
+# On-demand minimal beaker tests
+- &beaker-minimal-79to86
+  <<: *sanity-79to86
+  manual_trigger: True
+  labels:
+    - beaker-minimal
+    - beaker-minimal-7.9to8.6
+    - 7.9to8.6
+  identifier: sanity-7.9to8.6-beaker-minimal
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:partitioning & tag:7to8 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-7.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+# On-demand kernel-rt tests
+- &kernel-rt-79to86
+  <<: *beaker-minimal-79to86
+  labels:
+    - kernel-rt
+    - kernel-rt-7.9to8.6
+    - 7.9to8.6
+  identifier: sanity-7.9to8.6-kernel-rt
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:kernel-rt & tag:7to8 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-7.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+- &sanity-79to88
+  <<: *sanity-79to86
+  identifier: sanity-7.9to8.8
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.8"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-79to88
+  <<: *beaker-minimal-79to86
+  labels:
+    - beaker-minimal
+    - beaker-minimal-7.9to8.8
+    - 7.9to8.8
+  identifier: sanity-7.9to8.8-beaker-minimal
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.8"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand kernel-rt tests
+- &kernel-rt-79to88
+  <<: *kernel-rt-79to86
+  labels:
+    - kernel-rt
+    - kernel-rt-7.9to8.8
+    - 7.9to8.8
+  identifier: sanity-7.9to8.8-kernel-rt
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.8"
+    LEAPPDATA_BRANCH: "upstream"
+
+- &sanity-79to89
+  <<: *sanity-79to86
+  identifier: sanity-7.9to8.9
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.9"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-79to89
+  <<: *beaker-minimal-79to86
+  labels:
+    - beaker-minimal
+    - beaker-minimal-7.9to8.9
+    - 7.9to8.9
+  identifier: sanity-7.9to8.9-beaker-minimal
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.9"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand kernel-rt tests
+- &kernel-rt-79to89
+  <<: *kernel-rt-79to88
+  labels:
+    - kernel-rt
+    - kernel-rt-7.9to8.9
+    - 7.9to8.9
+  identifier: sanity-7.9to8.9-kernel-rt
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.9"
+    LEAPPDATA_BRANCH: "upstream"
+
+- &sanity-79to810
+  <<: *sanity-79to86
+  identifier: sanity-7.9to8.10
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.10"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-79to810
+  <<: *beaker-minimal-79to86
+  labels:
+    - beaker-minimal
+    - beaker-minimal-7.9to8.10
+    - 7.9to8.10
+  identifier: sanity-7.9to8.10-beaker-minimal
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.10"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand kernel-rt tests
+- &kernel-rt-79to810
+  <<: *kernel-rt-79to88
+  labels:
+    - kernel-rt
+    - kernel-rt-7.9to8.10
+    - 7.9to8.10
+  identifier: sanity-7.9to8.10-kernel-rt
+  env:
+    SOURCE_RELEASE: "7.9"
+    TARGET_RELEASE: "8.10"
+    LEAPPDATA_BRANCH: "upstream"
+
+- &sanity-86to90
+  <<: *sanity-79to86
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.6.0-Nightly]
+  identifier: sanity-8.6to9.0
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:sanity & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.6"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.6"
+    TARGET_RELEASE: "9.0"
+    RHSM_REPOS_EUS: "eus"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-86to90
+  <<: *beaker-minimal-79to86
+  labels:
+    - beaker-minimal
+    - beaker-minimal-8.6to9.0
+    - 8.6to9.0
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.6.0-Nightly]
+  identifier: sanity-8.6to9.0-beaker-minimal
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:partitioning & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.6"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.6"
+    TARGET_RELEASE: "9.0"
+    RHSM_REPOS_EUS: "eus"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand kernel-rt tests
+- &kernel-rt-86to90
+  <<: *beaker-minimal-86to90
+  labels:
+    - kernel-rt
+    - kernel-rt-8.6to9.0
+    - 8.6to9.0
+  identifier: sanity-8.6to9.0-kernel-rt
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:kernel-rt & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.6"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+- &sanity-88to92
+  <<: *sanity-86to90
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.8.0-Nightly]
+  identifier: sanity-8.8to9.2
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:sanity & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.8"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.8"
+    TARGET_RELEASE: "9.2"
+    RHSM_REPOS_EUS: "eus"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_DEVEL_TARGET_RELEASE: "9.2"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-88to92
+  <<: *beaker-minimal-86to90
+  labels:
+    - beaker-minimal
+    - beaker-minimal-8.8to9.2
+    - 8.6to9.2
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.8.0-Nightly]
+  identifier: sanity-8.8to9.2-beaker-minimal
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:partitioning & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.8"
+        settings:
+          provisioning:
+            post_install_script: "#!/bin/sh\nsudo sed -i s/.*ssh-rsa/ssh-rsa/ /root/.ssh/authorized_keys"
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.8"
+    TARGET_RELEASE: "9.2"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_DEVEL_TARGET_RELEASE: "9.2"
+
+# On-demand kernel-rt tests
+- &kernel-rt-88to92
+  <<: *beaker-minimal-88to92
+  labels:
+    - kernel-rt
+    - kernel-rt-8.8to9.2
+    - 8.8to9.2
+  identifier: sanity-8.8to9.2-kernel-rt
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:kernel-rt & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.8"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+- &sanity-89to93
+  <<: *sanity-88to92
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.9.0-Nightly]
+  identifier: sanity-8.9to9.3
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:sanity & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.9"
+    TARGET_RELEASE: "9.3"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_DEVEL_TARGET_RELEASE: "9.3"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-89to93
+  <<: *beaker-minimal-88to92
+  labels:
+    - beaker-minimal
+    - beaker-minimal-8.9to9.3
+    - 8.9to9.3
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.9.0-Nightly]
+  identifier: sanity-8.9to9.3-beaker-minimal
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:partitioning & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.9"
+    TARGET_RELEASE: "9.3"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_DEVEL_TARGET_RELEASE: "9.3"
+
+# On-demand kernel-rt tests
+- &kernel-rt-89to93
+  <<: *beaker-minimal-89to93
+  labels:
+    - kernel-rt
+    - kernel-rt-8.9to9.3
+    - 8.9to9.3
+  identifier: sanity-8.9to9.3-kernel-rt
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:kernel-rt & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.9"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+- &sanity-810to94
+  <<: *sanity-88to92
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.10.0-Nightly]
+  identifier: sanity-8.10to9.4
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:sanity & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.10"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.10"
+    TARGET_RELEASE: "9.4"
+    RHSM_REPOS: "rhel-8-for-x86_64-appstream-beta-rpms,rhel-8-for-x86_64-baseos-beta-rpms"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand minimal beaker tests
+- &beaker-minimal-810to94
+  <<: *beaker-minimal-88to92
+  labels:
+    - beaker-minimal
+    - beaker-minimal-8.10to9.4
+    - 8.10to9.4
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.10.0-Nightly]
+  identifier: sanity-8.10to9.4-beaker-minimal
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:partitioning & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.10"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.10"
+    TARGET_RELEASE: "9.4"
+    LEAPPDATA_BRANCH: "upstream"
+
+# On-demand kernel-rt tests
+- &kernel-rt-810to94
+  <<: *beaker-minimal-810to94
+  labels:
+    - kernel-rt
+    - kernel-rt-8.10to9.4
+    - 8.10to9.4
+  identifier: sanity-8.10to9.4-kernel-rt
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:kernel-rt & tag:8to9 & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.10"
+        settings:
+          provisioning:
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+
+- &sanity-86to90-aws
+  <<: *sanity-79to86-aws
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.6-rhui]
+  identifier: sanity-8.6to9.0-aws
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:upgrade_happy_path & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.6"
+        settings:
+          provisioning:
+            post_install_script: "#!/bin/sh\nsudo sed -i s/.*ssh-rsa/ssh-rsa/ /root/.ssh/authorized_keys"
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.6"
+    TARGET_RELEASE: "9.0"
+    RHSM_REPOS: "rhel-8-for-x86_64-appstream-eus-rpms,rhel-8-for-x86_64-baseos-eus-rpms"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui
+
+- &sanity-88to92-aws
+  <<: *sanity-86to90-aws
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.8-rhui]
+  identifier: sanity-8.8to9.2-aws
+  # NOTE(mkluson) Unfortunately to use yaml templates we need to rewrite the whole tf_extra_params dict
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:upgrade_happy_path & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.8"
+        settings:
+          provisioning:
+            post_install_script: "#!/bin/sh\nsudo sed -i s/.*ssh-rsa/ssh-rsa/ /root/.ssh/authorized_keys"
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.8"
+    TARGET_RELEASE: "9.2"
+    RHSM_REPOS: "rhel-8-for-x86_64-appstream-eus-rpms,rhel-8-for-x86_64-baseos-eus-rpms"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui
+
+- &sanity-89to93-aws
+  <<: *sanity-86to90-aws
+  targets:
+    epel-8-x86_64:
+      distros: [RHEL-8.9-rhui]
+  identifier: sanity-8.9to9.3-aws
+  # NOTE(mkluson) Unfortunately to use yaml templates we need to rewrite the whole tf_extra_params dict
+  tf_extra_params:
+    test:
+      tmt:
+        plan_filter: 'tag:upgrade_happy_path & enabled:true'
+    environments:
+      - tmt:
+          context:
+            distro: "rhel-8.9"
+        settings:
+          provisioning:
+            post_install_script: "#!/bin/sh\nsudo sed -i s/.*ssh-rsa/ssh-rsa/ /root/.ssh/authorized_keys"
+            tags:
+              BusinessUnit: sst_upgrades@leapp_upstream_test
+  env:
+    SOURCE_RELEASE: "8.9"
+    TARGET_RELEASE: "9.3"
+    RHSM_REPOS: "rhel-8-for-x86_64-appstream-rpms,rhel-8-for-x86_64-baseos-rpms"
+    RHUI: "aws"
+    LEAPPDATA_BRANCH: "upstream"
+    LEAPP_NO_RHSM: "1"
+    USE_CUSTOM_REPOS: rhui

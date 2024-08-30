@@ -32,6 +32,7 @@ class EfiFinalizationFix(Actor):
                 'Red Hat Enterprise Linux': 'redhat',
                 'Rocky Linux': 'rocky',
                 'Scientific Linux': 'redhat',
+                'EuroLinux': 'eurolinux',
                 'CloudLinux': 'centos',
         }
 
@@ -41,8 +42,24 @@ class EfiFinalizationFix(Actor):
         }
 
         def devparts(dev):
-          part = next(re.finditer(r'\d+$', dev)).group(0)
-          dev = dev[:-len(part)]
+          """
+          NVMe block devices aren't named like SCSI/ATA/etc block devices and must be parsed differently.
+          SCSI/ATA/etc devices have a syntax resembling /dev/sdb4 for the 4th partition on the 2nd disk.
+          NVMe devices have a syntax resembling /dev/nvme0n2p4 for the 4th partition on the 2nd disk.
+          """
+          if '/dev/nvme' in dev:
+            """
+            NVMe
+            """
+            part = next(re.finditer(r'p\d+$', dev)).group(0)
+            dev = dev[:-len(part)]
+            part = part[1:]
+          else:
+            """
+            Non-NVMe (SCSI, ATA, etc)
+            """
+            part = next(re.finditer(r'\d+$', dev)).group(0)
+            dev = dev[:-len(part)]
           return [dev, part];
 
         with open('/etc/system-release', 'r') as sr:
