@@ -42,7 +42,7 @@ py2_byte_compile "%1" "%2"}
 
 Name:           leapp-repository
 Version:        0.20.0
-Release:        1%{?dist}.cloudlinux
+Release:        2%{?dist}.cloudlinux
 Summary:        Repositories for leapp
 
 License:        ASL 2.0
@@ -104,7 +104,7 @@ Requires:       leapp-framework >= 5.0, leapp-framework < 6
 
 # Since we provide sub-commands for the leapp utility, we expect the leapp
 # tool to be installed as well.
-Requires:       leapp
+Requires:       leapp >= 0.17.0
 
 # Used to determine RHEL version of a given target RHEL installation image -
 # uncompressing redhat-release package from the ISO.
@@ -140,6 +140,9 @@ Summary:    Meta-package with system dependencies of %{lpr_name} package
 
 # The package has been renamed, so let's obsoletes the old one
 Obsoletes:      leapp-repository-deps < 0.14.0-%{release}
+
+# The package was updated with new version of pes files
+Conflicts:      leapp-data-cloudlinux < 0.3-1
 
 # IMPORTANT: every time the requirements are changed, increment number by one
 # - same for Requires in main package
