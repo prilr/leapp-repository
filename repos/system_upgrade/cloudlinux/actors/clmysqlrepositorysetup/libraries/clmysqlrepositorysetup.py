@@ -127,7 +127,7 @@ class MySqlRepositorySetupLibrary(object):
                     [
                         reporting.Title("An old CL-MySQL version will no longer be available in EL8"),
                         reporting.Summary(
-                            "A an old CloudLinux-provided MySQL version is installed on this system. "
+                            "An old CloudLinux-provided MySQL version is installed on this system. "
                             "It will no longer be available on the target system. "
                             "This situation cannot be automatically resolved by Leapp. "
                             "Problematic repository: {0}".format(target_repo.repoid)
@@ -137,8 +137,10 @@ class MySqlRepositorySetupLibrary(object):
                         reporting.Groups([reporting.Groups.INHIBITOR]),
                         reporting.Remediation(
                             hint=(
-                                "Upgrade to a more recent MySQL version, or"
-                                "uninstall the deprecated MySQL packages and disable the repository."
+                                "Upgrade to a more recent MySQL version, or "
+                                "uninstall the deprecated MySQL packages and disable the repository. "
+                                "Note that you will also need to update any bindings (e.g., PHP or Python) "
+                                "that are dependent on this MySQL version."
                             )
                         ),
                     ]
