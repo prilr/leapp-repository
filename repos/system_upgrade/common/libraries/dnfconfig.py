@@ -105,9 +105,16 @@ def _set_excluded_pkgs(context, pkglist, disable_plugins):
 
     try:
         context.call(cmd)
-    except CalledProcessError:
+    except CalledProcessError as e:
         api.current_logger().error('Cannot set the dnf configuration')
-        raise
+        raise StopActorExecutionError(
+            message='Cannot set the DNF configuration with the command: {}'.format(cmd),
+            details={
+                'details': 'An exception raised: {}'.format(str(e)),
+                'stdout': e.stdout,
+                'stderr': e.stderr
+            }
+        )
     api.current_logger().debug('The DNF configuration has been updated to exclude leapp packages.')
 
 
@@ -147,7 +154,14 @@ def _set_repository_state(context, repo_id, new_state):
 
     try:
         context.call(cmd)
-    except CalledProcessError:
+    except CalledProcessError as e:
         api.current_logger().error('Cannot set the dnf configuration')
-        raise
+        raise StopActorExecutionError(
+            message='Cannot set the DNF configuration with the command: {}'.format(cmd),
+            details={
+                'details': 'An exception raised: {}'.format(str(e)),
+                'stdout': e.stdout,
+                'stderr': e.stderr
+            }
+        )
     api.current_logger().debug('Repository {} has been {}'.format(repo_id, new_state))
