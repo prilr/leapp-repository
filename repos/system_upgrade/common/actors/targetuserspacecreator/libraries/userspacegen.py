@@ -268,7 +268,9 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         context.call(['dnf', '-y', 'localinstall', cloudlinux_release_url],
                      callback_raw=utils.logging_handler)
 
-        enable_spacewalk_module(context)
+        # cloudlinux 9 does not have modular packages
+        if target_major_version == '8':
+            enable_spacewalk_module(context)
 
         api.current_logger().debug('Installing packages into target userspace: {}'.format(packages))
 
