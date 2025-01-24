@@ -340,7 +340,7 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         # transaction check phase is done - so the preupgrade checks won't affect the host system.
         # The 'switch_cln_channel_download' actor should take care of switching the channel back to the CL8 channel
         # when it's time to download the upgrade packages.
-        cln_switch(target=8)
+        cln_switch(target=int(get_target_major_version()))
 
 
 def _query_rpm_for_pkg_files(context, pkgs):
