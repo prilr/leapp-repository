@@ -262,9 +262,10 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         api.current_logger().debug('Installing cloudlinux-release')
         context.call(['rpm', '--import', 'https://repo.cloudlinux.com/cloudlinux/security/RPM-GPG-KEY-CloudLinux'],
                      callback_raw=utils.logging_handler)
-        cloudlinux_release_url = 'https://repo.cloudlinux.com/cloudlinux/migrate/release-files' \
-                                 '/cloudlinux/{version}/x86_64/cloudlinux{version}-release-current.x86_64.rpm' \
-                                 ''.format(version=target_major_version)
+        cloudlinux_release_url = (
+            'https://repo.cloudlinux.com/cloudlinux/migrate/release-files'
+            '/cloudlinux/{version}/x86_64/cloudlinux{version}-release-current.x86_64.rpm'
+        ).format(version=target_major_version)
         context.call(['dnf', '-y', 'localinstall', cloudlinux_release_url],
                      callback_raw=utils.logging_handler)
 
@@ -340,7 +341,7 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
         # transaction check phase is done - so the preupgrade checks won't affect the host system.
         # The 'switch_cln_channel_download' actor should take care of switching the channel back to the CL8 channel
         # when it's time to download the upgrade packages.
-        cln_switch(target=int(get_target_major_version()))
+        cln_switch(target=int(target_major_version))
 
 
 def _query_rpm_for_pkg_files(context, pkgs):
