@@ -42,7 +42,7 @@ py2_byte_compile "%1" "%2"}
 
 Name:           leapp-repository
 Version:        0.20.0
-Release:        3%{?dist}.cloudlinux
+Release:        4%{?dist}.cloudlinux
 Summary:        Repositories for leapp
 
 License:        ASL 2.0
