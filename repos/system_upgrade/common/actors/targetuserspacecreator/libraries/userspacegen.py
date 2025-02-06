@@ -332,16 +332,11 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
 
         api.current_logger().debug('Checking the CLN registration status')
         context.call(['rhn_check'], callback_raw=utils.logging_handler)
+
         # To get packages from Spacewalk repos (aka CLN) we need to switch the CLN channel.
-
-        # Note that this switches the channel for the entire host system, not just the target userspace -
-        # so if we don't reset it back to the original channel, the host system will be left in an inconsistent state.
-
-        # The 'switch_cln_channel_reset' actor should reset the channel back to the original state after the
-        # transaction check phase is done - so the preupgrade checks won't affect the host system.
-        # The 'switch_cln_channel_download' actor should take care of switching the channel back to the CL8 channel
-        # when it's time to download the upgrade packages.
-        cln_switch(target=int(target_major_version))
+        # localonly flag switches channel only inside of the overlayfs
+        api.current_logger().debug('Switching channel to %s' % target_major_version)
+        context.call(['cln-switch-channel', '-t', str(target_major_version), '--localonly'])
 
 
 def _query_rpm_for_pkg_files(context, pkgs):
