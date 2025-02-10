@@ -94,6 +94,9 @@ Conflicts:      leapp-upgrade-el7toel8
 
 %endif
 
+# Requires tools which allow switching between channels
+Requires: cln-switch-channel = 2
+
 # IMPORTANT: every time the requirements are changed, increment number by one
 # - same for Provides in deps subpackage
 Requires:       leapp-repository-dependencies = %{leapp_repo_deps}
