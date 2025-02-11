@@ -10,7 +10,7 @@ from leapp.libraries.common import dnfplugin, mounting, overlaygen, repofileutil
 from leapp.libraries.common.config import get_env, get_product_type
 from leapp.libraries.common.config.version import get_target_major_version
 from leapp.libraries.common.gpg import get_path_to_gpg_certs, is_nogpgcheck_set
-from leapp.libraries.common.cln_switch import cln_switch
+from leapp.libraries.common.cln_switch import override_channel
 from leapp.libraries.stdlib import api, CalledProcessError, config, run
 from leapp.models import RequiredTargetUserspacePackages  # deprecated
 from leapp.models import TMPTargetRepositoriesFacts  # deprecated all the time
@@ -329,14 +329,6 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
                         )
 
             raise StopActorExecutionError(message=message, details=details)
-
-        api.current_logger().debug('Checking the CLN registration status')
-        context.call(['rhn_check'], callback_raw=utils.logging_handler)
-
-        # To get packages from Spacewalk repos (aka CLN) we need to switch the CLN channel.
-        # localonly flag switches channel only inside of the overlayfs
-        api.current_logger().debug('Switching channel to %s' % target_major_version)
-        context.call(['cln-switch-channel', '-t', str(target_major_version), '--localonly'])
 
 
 def _query_rpm_for_pkg_files(context, pkgs):
@@ -689,11 +681,7 @@ def _prep_repository_access(context, target_userspace):
         run(['rm', '-rf', os.path.join(target_etc, 'rhsm')])
         context.copytree_from('/etc/rhsm', os.path.join(target_etc, 'rhsm'))
 
-    # Copy RHN data independent from RHSM config
     if os.path.isdir('/etc/sysconfig/rhn'):
-        context.call(['/usr/sbin/rhn_check'], callback_raw=utils.logging_handler)
-        run(['rm', '-rf', os.path.join(target_etc, 'sysconfig/rhn')])
-        context.copytree_from('/etc/sysconfig/rhn', os.path.join(target_etc, 'sysconfig/rhn'))
         # Set up spacewalk plugin config
         with open(os.path.join(target_etc, 'dnf/plugins/spacewalk.conf'), 'r') as f:
             lines = f.readlines()
@@ -1181,6 +1169,11 @@ def _create_target_userspace(context, packages, files, target_repoids):
     with mounting.NspawnActions(base_dir=target_path) as target_context:
         _copy_files(target_context, files)
     dnfplugin.install(_get_target_userspace())
+
+    # do not switch channel before this stage because _copy_files above copies
+    # related configuration files from host to target userspace
+    target_major_version = get_target_major_version()
+    override_channel(os.path.join(_get_target_userspace(), 'etc/sysconfig/rhn/up2date'), target_major_version)
 
     # and do not forget to set the rhsm into the container mode again
     with mounting.NspawnActions(_get_target_userspace()) as target_context:
