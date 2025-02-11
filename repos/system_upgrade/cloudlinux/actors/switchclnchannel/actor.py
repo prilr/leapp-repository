@@ -3,7 +3,7 @@ import json
 
 from leapp.actors import Actor
 from leapp.libraries.stdlib import api
-from leapp.tags import FinalizationPhaseTag, IPUWorkflowTag
+from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
 from leapp.libraries.stdlib import CalledProcessError
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 from leapp.libraries.common.cln_switch import cln_switch, get_target_userspace_path
@@ -23,7 +23,7 @@ class SwitchClnChannelDownload(Actor):
     name = "switch_cln_channel"
     consumes = ()
     produces = (Report,)
-    tags = (FinalizationPhaseTag, IPUWorkflowTag)
+    tags = (FirstBootPhaseTag, IPUWorkflowTag)
 
     @run_on_cloudlinux
     def process(self):
