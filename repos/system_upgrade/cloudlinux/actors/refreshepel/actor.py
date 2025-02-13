@@ -9,7 +9,6 @@ from leapp.libraries.common.backup import backup_and_remove
 from leapp.libraries.common.config.version import get_target_major_version
 
 REPO_DIR = '/etc/yum.repos.d'
-EPEL_INSTALL_URL = 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-{}.noarch.rpm'.format(get_target_major_version())
 
 
 class RefreshEPEL(Actor):
@@ -40,8 +39,10 @@ class RefreshEPEL(Actor):
 
     @run_on_cloudlinux
     def process(self):
+        epel_install_url = 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-{}.noarch.rpm'.format(get_target_major_version())
+
         target_version = int(get_target_major_version())
-        target_epel_release = EPEL_INSTALL_URL.format(target_version)
+        target_epel_release = epel_install_url.format(target_version)
 
         # EPEL release package name is 'epel-release' and the version should match the target OS version
         epel_release_package = 'epel-release'
