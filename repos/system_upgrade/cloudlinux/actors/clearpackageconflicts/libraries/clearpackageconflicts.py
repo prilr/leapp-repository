@@ -1,6 +1,5 @@
 import os
 import errno
-from re import L
 import shutil
 
 from leapp.libraries.stdlib import api
@@ -80,5 +79,12 @@ def lua_cjson_handle(package_lookup):
 
 
 def process():
-    rpm_lookup = {rpm.name for rpm in api.consume(InstalledRPM)}
+    rpm_lookup = set()
+    # Each InstalledRPM is a list of RPM objects.
+    # There's a bunch of other fields, but all that we're interested in here is their names.
+    installed_rpm_messages = api.consume(InstalledRPM)
+    for rpm_list in installed_rpm_messages:
+        rpm_names = [item.name for item in rpm_list.items]
+        rpm_lookup.update(rpm_names)
+
     alt_python37_handle(rpm_lookup)
