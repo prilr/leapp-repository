@@ -1,33 +1,34 @@
 from leapp.actors import Actor
 from leapp.libraries.stdlib import api
-from leapp.tags import IPUWorkflowTag, TargetTransactionChecksPhaseTag
+from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
 from leapp.libraries.stdlib import CalledProcessError
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
-from leapp.libraries.common.cln_switch import cln_switch
-from leapp.libraries.common.config.version import get_source_major_version
+from leapp.libraries.common.cln_switch import cln_switch, get_target_userspace_path
 from leapp import reporting
 from leapp.reporting import Report
+from leapp.libraries.common.config.version import get_target_major_version
 
 
-class SwitchClnChannelReset(Actor):
+class SwitchClnChannel(Actor):
     """
-    Reset the CLN channel to CL7 to keep the system state consistent before the main upgrade phase.
+    Permanently switch CLN channel to target os version
+    when upgrade is complete.
     """
 
-    name = "switch_cln_channel_reset"
+    name = "switch_cln_channel"
     consumes = ()
     produces = (Report,)
-    tags = (IPUWorkflowTag, TargetTransactionChecksPhaseTag.After)
+    tags = (FirstBootPhaseTag, IPUWorkflowTag)
 
     @run_on_cloudlinux
     def process(self):
         try:
-            cln_switch(target=get_source_major_version())
+            cln_switch(target=int(get_target_major_version()))
         except CalledProcessError as e:
             reporting.create_report(
                 [
                     reporting.Title(
-                        "Failed to switch CloudLinux Network channel."
+                        "Failed to switch CloudLinux Network channel"
                     ),
                     reporting.Summary(
                         "Command {} failed with exit code {}."

@@ -33,6 +33,7 @@ def get_cln_cacheonly_flag_path():
     """
     return os.path.join(get_target_userspace_path(), CLN_CACHEONLY_MARKER.lstrip('/'))
 
+
 def cln_switch(target):
     """
     Switch the CloudLinux Network channel to the specified target OS.
@@ -47,3 +48,25 @@ def cln_switch(target):
     api.current_logger().debug('Channel switch result: %s', res)
     res = run(yum_clean_cmd)  # required to update the repolist
     api.current_logger().debug('yum cleanup result: %s', res)
+
+
+def override_channel(config_path, target):
+    """
+    Override cln channel locally (not affecting information on CLN side)
+    aboit which channel we must use for upgrade.
+    """
+    replaced = False
+    with open(config_path, 'r') as f:
+        lines = f.readlines()
+        new_lines = []
+        for line in lines:
+            if line.startswith('channelOverride'):
+                line = 'channelOverride = cloudlinux-x86_64-server-%s\n' % target
+                replaced = True
+            new_lines.append(line)
+
+    if not replaced:
+        new_lines.append('channelOverride = cloudlinux-x86_64-server-%s\n' % target)
+
+    with open(config_path, 'w') as f:
+        f.writelines(new_lines)
