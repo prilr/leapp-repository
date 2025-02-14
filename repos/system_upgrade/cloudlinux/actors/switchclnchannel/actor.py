@@ -1,6 +1,3 @@
-import os
-import json
-
 from leapp.actors import Actor
 from leapp.libraries.stdlib import api
 from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
@@ -12,12 +9,10 @@ from leapp.reporting import Report
 from leapp.libraries.common.config.version import get_target_major_version
 
 
-DEFAULT_CLN_MIRROR = "https://xmlrpc.cln.cloudlinux.com/XMLRPC/"
-
-
-class SwitchClnChannelDownload(Actor):
+class SwitchClnChannel(Actor):
     """
-    Permanently switch CLN channel to target os version.
+    Permanently switch CLN channel to target os version
+    when upgrade is complete.
     """
 
     name = "switch_cln_channel"
@@ -33,7 +28,7 @@ class SwitchClnChannelDownload(Actor):
             reporting.create_report(
                 [
                     reporting.Title(
-                        "Failed to switch CloudLinux Network channel from 7 to 8."
+                        "Failed to switch CloudLinux Network channel"
                     ),
                     reporting.Summary(
                         "Command {} failed with exit code {}."
