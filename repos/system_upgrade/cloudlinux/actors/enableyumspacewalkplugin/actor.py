@@ -4,6 +4,7 @@ from leapp import reporting
 from leapp.reporting import Report
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 
+
 try:
     # py2
     import ConfigParser as configparser
