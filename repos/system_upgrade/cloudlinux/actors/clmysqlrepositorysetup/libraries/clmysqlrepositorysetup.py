@@ -203,6 +203,10 @@ class MySqlRepositorySetupLibrary(object):
                 # Replace only the first digit (source_major) after 'yum'
                 url_parts[1] = url_parts[1].replace(str(source_major), str(target_major), 1)
                 target_repo.baseurl = "yum".join(url_parts)
+            else:
+                # TODO: fix in https://cloudlinux.atlassian.net/browse/CLOS-3490
+                api.current_logger().warning("Unsupported repository URL={}, skipping".format(target_repo.baseurl))
+                return
 
             if target_repo.enabled:
                 api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
