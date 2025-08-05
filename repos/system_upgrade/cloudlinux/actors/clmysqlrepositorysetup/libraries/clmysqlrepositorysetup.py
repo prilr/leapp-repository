@@ -180,6 +180,28 @@ class MySqlRepositorySetupLibrary(object):
         else:
             api.current_logger().debug("No repos from CloudLinux repofile {} enabled, ignoring".format(repofile_name))
 
+    def _make_upgrade_mariadb_url(self, mariadb_url, source_major, target_major):
+        """
+        Maria URLs look like this:
+          baseurl = https://archive.mariadb.org/mariadb-10.3/yum/centos/7/x86_64
+          baseurl = https://archive.mariadb.org/mariadb-10.7/yum/centos7-ppc64/
+          baseurl = https://distrohub.kyiv.ua/mariadb/yum/11.8/rhel/$releasever/$basearch
+          baseurl = https://mariadb.gb.ssimn.org/yum/12.0/centos/$releasever/$basearch
+          baseurl = https://mariadb.gb.ssimn.org/yum/12.0/almalinux8-amd64/$releasever/$basearch
+        We want to replace the parts of the url to make them work with target os version.
+        """
+
+        # Replace the first occurrence of source_major with target_major after 'yum'
+        url_parts = mariadb_url.split("yum", 1)
+        if len(url_parts) == 2:
+            # Replace only the first digit (source_major) after 'yum'
+            url_parts[1] = url_parts[1].replace(str(source_major), str(target_major), 1)
+            return "yum".join(url_parts)
+        else:
+            # TODO: fix in https://cloudlinux.atlassian.net/browse/CLOS-3490
+            api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
+            return
+
     def mariadb_process(self, repofile_name, repofile_data):
         """
         Process upstream MariaDB options.
@@ -191,22 +213,9 @@ class MySqlRepositorySetupLibrary(object):
         source_major = get_source_major_version()
 
         for source_repo in repofile_data.data:
-            # Maria URLs look like this:
-            # baseurl = https://archive.mariadb.org/mariadb-10.3/yum/centos/7/x86_64
-            # baseurl = https://archive.mariadb.org/mariadb-10.7/yum/centos7-ppc64/
-            # We want to replace the source_major in OS name after /yum/ with target_major
             target_repo = copy.deepcopy(source_repo)
             target_repo.repoid = "{}-{}".format(target_repo.repoid, target_major)
-            # Replace the first occurrence of source_major with target_major after 'yum'
-            url_parts = target_repo.baseurl.split("yum", 1)
-            if len(url_parts) == 2:
-                # Replace only the first digit (source_major) after 'yum'
-                url_parts[1] = url_parts[1].replace(str(source_major), str(target_major), 1)
-                target_repo.baseurl = "yum".join(url_parts)
-            else:
-                # TODO: fix in https://cloudlinux.atlassian.net/browse/CLOS-3490
-                api.current_logger().warning("Unsupported repository URL={}, skipping".format(target_repo.baseurl))
-                return
+            target_repo.baseurl = self._make_upgrade_mariadb_url(source_repo.baseurl, source_major, target_major)
 
             if target_repo.enabled:
                 api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
