@@ -31,6 +31,7 @@ MYSQL_MARKERS = ["mysql-community"]
 OLD_CLMYSQL_VERSIONS = ["5.0", "5.1"]
 OLD_MYSQL_UPSTREAM_VERSIONS_CL7 = ["5.7", "5.6", "5.5"]
 OLD_MYSQL_UPSTREAM_VERSIONS_CL8 = ["5.7", "5.6"]  # adjust as needed for CL8
+OLD_MARIADB_UPSTREAM_VERSIONS_CL8 = ["10.3", "10.4"]  # MariaDB versions to block for CL8 source
 
 
 def build_install_list(prefix):
@@ -194,8 +195,13 @@ class MySqlRepositorySetupLibrary(object):
         # Replace the first occurrence of source_major with target_major after 'yum'
         url_parts = mariadb_url.split("yum", 1)
         if len(url_parts) == 2:
-            # Replace only the first digit (source_major) after 'yum'
-            url_parts[1] = url_parts[1].replace(str(source_major), str(target_major), 1)
+            # Replace major version in "/centos/7/" and /yum/12.0/almalinux9-amd64/,
+            # but do not replace it in /mariadb-10.7/yum/
+            url_parts[1] = url_parts[1].replace("/{}/".format(source_major), "/{}/".format(target_major))
+            url_parts[1] = url_parts[1].replace("{}-".format(source_major), "{}-".format(target_major))
+            # Replace $releasever because upstream repos expect major version
+            # and cloudlinux provides major.minor as $releasever
+            url_parts[1] = url_parts[1].replace('$releasever', str(target_major))
             return "yum".join(url_parts)
         else:
             # TODO: fix in https://cloudlinux.atlassian.net/browse/CLOS-3490
@@ -218,6 +224,31 @@ class MySqlRepositorySetupLibrary(object):
             target_repo.baseurl = self._make_upgrade_mariadb_url(source_repo.baseurl, source_major, target_major)
 
             if target_repo.enabled:
+                # MariaDB 10.4 is not compatible with Leapp upgrade
+                if str(source_major) == "8" and any(ver in target_repo.baseurl for ver in OLD_MARIADB_UPSTREAM_VERSIONS_CL8):
+                    reporting.create_report(
+                        [
+                            reporting.Title("MariaDB is not compatible with Leapp upgrade"),
+                            reporting.Summary(
+                                "MariaDB is enabled on this system but is not compatible with Leapp upgrade process. "
+                                "The upgrade is blocked to prevent system instability. "
+                                "This situation cannot be automatically resolved by Leapp. "
+                                "Problematic repository: {0}".format(target_repo.repoid)
+                            ),
+                            reporting.Severity(reporting.Severity.MEDIUM),
+                            reporting.Groups([reporting.Groups.REPOSITORY]),
+                            reporting.Groups([reporting.Groups.INHIBITOR]),
+                            reporting.Remediation(
+                                hint=(
+                                    "Upgrade to a more recent MariaDB version, or "
+                                    "uninstall the MariaDB packages and disable the repository. "
+                                    "Note that you will also need to update any bindings (e.g., PHP or Python) "
+                                    "that are dependent on this MariaDB version."
+                                )
+                            ),
+                        ]
+                    )
+                
                 api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
