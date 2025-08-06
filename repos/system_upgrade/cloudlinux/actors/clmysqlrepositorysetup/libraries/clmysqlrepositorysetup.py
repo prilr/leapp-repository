@@ -228,9 +228,9 @@ class MySqlRepositorySetupLibrary(object):
                 if str(source_major) == "8" and any(ver in target_repo.baseurl for ver in OLD_MARIADB_UPSTREAM_VERSIONS_CL8):
                     reporting.create_report(
                         [
-                            reporting.Title("MariaDB is not compatible with Leapp upgrade"),
+                            reporting.Title("MariaDB version is not compatible with Leapp upgrade"),
                             reporting.Summary(
-                                "MariaDB is enabled on this system but is not compatible with Leapp upgrade process. "
+                                "MariaDB is installed on this system but is's version is not compatible with Leapp upgrade process. "
                                 "The upgrade is blocked to prevent system instability. "
                                 "This situation cannot be automatically resolved by Leapp. "
                                 "Problematic repository: {0}".format(target_repo.repoid)
