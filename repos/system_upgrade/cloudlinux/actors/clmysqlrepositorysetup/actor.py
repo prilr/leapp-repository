@@ -1,16 +1,16 @@
 from leapp.actors import Actor
-from leapp.reporting import Report
 from leapp.libraries.actor.clmysqlrepositorysetup import MySqlRepositorySetupLibrary
+from leapp.libraries.common.cllaunch import run_on_cloudlinux
 from leapp.models import (
     CustomTargetRepository,
     CustomTargetRepositoryFile,
     InstalledMySqlTypes,
-    RpmTransactionTasks,
-    RepositoriesMapping,
     InstalledRPM,
+    RepositoriesMapping,
+    RpmTransactionTasks,
 )
+from leapp.reporting import Report
 from leapp.tags import FactsPhaseTag, IPUWorkflowTag
-from leapp.libraries.common.cllaunch import run_on_cloudlinux
 
 
 class ClMysqlRepositorySetup(Actor):

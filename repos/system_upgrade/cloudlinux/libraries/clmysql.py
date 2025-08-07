@@ -1,5 +1,6 @@
 import os
-from leapp.libraries.stdlib import api, run, CalledProcessError
+
+from leapp.libraries.stdlib import CalledProcessError, api, run
 
 # This file contains the data on the currently active MySQL installation type and version.
 CL7_MYSQL_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type"
