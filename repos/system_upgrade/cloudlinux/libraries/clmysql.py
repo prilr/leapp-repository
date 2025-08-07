@@ -11,6 +11,7 @@ MODULE_STREAMS = {
     "mysql56": "mysql:cl-MySQL56",
     "mysql57": "mysql:cl-MySQL57",
     "mysql80": "mysql:cl-MySQL80",
+    "mysql84": "mysql:cl-MySQL84",
     "mariadb55": "mariadb:cl-MariaDB55",
     "mariadb100": "mariadb:cl-MariaDB100",
     "mariadb101": "mariadb:cl-MariaDB101",
@@ -19,6 +20,7 @@ MODULE_STREAMS = {
     "mariadb104": "mariadb:cl-MariaDB104",
     "mariadb105": "mariadb:cl-MariaDB105",
     "mariadb106": "mariadb:cl-MariaDB106",
+    "mariadb1104": "mariadb:cl-MariaDB1104",
     "percona56": "percona:cl-Percona56",
 }
 
