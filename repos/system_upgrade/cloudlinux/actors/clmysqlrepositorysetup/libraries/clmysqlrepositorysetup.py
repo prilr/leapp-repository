@@ -1,29 +1,29 @@
-import os
 import copy
+import os
 
-from leapp.models import (
-    InstalledMySqlTypes,
-    CustomTargetRepositoryFile,
-    CustomTargetRepository,
-    RpmTransactionTasks,
-    InstalledRPM,
-    RepositoriesMapping,
-    RepoMapEntry,
-    PESIDRepositoryEntry,
-    Module,
-)
-from leapp.libraries.stdlib import api
-from leapp.libraries.common import repofileutils
 from leapp import reporting
-from leapp.libraries.common.clmysql import get_clmysql_type, get_pkg_prefix, MODULE_STREAMS
+from leapp.libraries.common import repofileutils
 from leapp.libraries.common.cl_repofileutils import (
-    create_leapp_repofile_copy,
-    REPO_DIR,
     LEAPP_COPY_SUFFIX,
+    REPO_DIR,
     REPOFILE_SUFFIX,
+    create_leapp_repofile_copy,
 )
-from leapp.models import RepositoryFile
+from leapp.libraries.common.clmysql import MODULE_STREAMS, get_clmysql_type, get_pkg_prefix
 from leapp.libraries.common.config.version import get_source_major_version, get_target_major_version
+from leapp.libraries.stdlib import api
+from leapp.models import (
+    CustomTargetRepository,
+    CustomTargetRepositoryFile,
+    InstalledMySqlTypes,
+    InstalledRPM,
+    Module,
+    PESIDRepositoryEntry,
+    RepoMapEntry,
+    RepositoriesMapping,
+    RepositoryFile,
+    RpmTransactionTasks,
+)
 
 CL_MARKERS = ["cl-mysql", "cl-mariadb", "cl-percona"]
 MARIA_MARKERS = ["MariaDB"]

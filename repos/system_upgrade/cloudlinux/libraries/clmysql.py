@@ -1,5 +1,6 @@
 import os
-from leapp.libraries.stdlib import api, run, CalledProcessError
+
+from leapp.libraries.stdlib import CalledProcessError, api, run
 
 # This file contains the data on the currently active MySQL installation type and version.
 CL7_MYSQL_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type"
@@ -10,6 +11,7 @@ MODULE_STREAMS = {
     "mysql56": "mysql:cl-MySQL56",
     "mysql57": "mysql:cl-MySQL57",
     "mysql80": "mysql:cl-MySQL80",
+    "mysql84": "mysql:cl-MySQL84",
     "mariadb55": "mariadb:cl-MariaDB55",
     "mariadb100": "mariadb:cl-MariaDB100",
     "mariadb101": "mariadb:cl-MariaDB101",
@@ -18,6 +20,7 @@ MODULE_STREAMS = {
     "mariadb104": "mariadb:cl-MariaDB104",
     "mariadb105": "mariadb:cl-MariaDB105",
     "mariadb106": "mariadb:cl-MariaDB106",
+    "mariadb1104": "mariadb:cl-MariaDB1104",
     "percona56": "percona:cl-Percona56",
 }
 
