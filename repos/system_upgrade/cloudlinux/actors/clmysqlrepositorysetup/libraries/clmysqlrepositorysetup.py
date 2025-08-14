@@ -195,7 +195,7 @@ class MySqlRepositorySetupLibrary(object):
         # Replace the first occurrence of source_major with target_major after 'yum'
         url_parts = mariadb_url.split("yum", 1)
         if len(url_parts) == 2:
-            # Replace major version in "/centos/7/" and /yum/12.0/almalinux9-amd64/,
+            # Replace major version in "/centos/7/" and /12.0/almalinux9-amd64/,
             # but do not replace it in /mariadb-10.7/yum/
             url_parts[1] = url_parts[1].replace("/{}/".format(source_major), "/{}/".format(target_major))
             url_parts[1] = url_parts[1].replace("{}-".format(source_major), "{}-".format(target_major))
@@ -204,7 +204,6 @@ class MySqlRepositorySetupLibrary(object):
             url_parts[1] = url_parts[1].replace('$releasever', str(target_major))
             return "yum".join(url_parts)
         else:
-            # TODO: fix in https://cloudlinux.atlassian.net/browse/CLOS-3490
             api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
             return
 
@@ -230,7 +229,7 @@ class MySqlRepositorySetupLibrary(object):
                         [
                             reporting.Title("MariaDB version is not compatible with Leapp upgrade"),
                             reporting.Summary(
-                                "MariaDB is installed on this system but is's version is not compatible with Leapp upgrade process. "
+                                "MariaDB is installed on this system but its version is not compatible with Leapp upgrade process. "
                                 "The upgrade is blocked to prevent system instability. "
                                 "This situation cannot be automatically resolved by Leapp. "
                                 "Problematic repository: {0}".format(target_repo.repoid)
