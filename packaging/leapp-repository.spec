@@ -42,7 +42,7 @@ py2_byte_compile "%1" "%2"}
 
 Name:           leapp-repository
 Version:        0.20.0
-Release:        6%{?dist}.cloudlinux
+Release:        7%{?dist}.cloudlinux
 Summary:        Repositories for leapp
 
 License:        ASL 2.0
@@ -145,7 +145,7 @@ Summary:    Meta-package with system dependencies of %{lpr_name} package
 Obsoletes:      leapp-repository-deps < 0.14.0-%{release}
 
 # The package was updated with new version of pes files
-Conflicts:      leapp-data-cloudlinux < 0.3-1
+Conflicts:      leapp-data-cloudlinux < 0.3-8
 
 # IMPORTANT: every time the requirements are changed, increment number by one
 # - same for Requires in main package
