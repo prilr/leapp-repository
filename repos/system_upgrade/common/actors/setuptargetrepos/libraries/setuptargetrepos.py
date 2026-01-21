@@ -134,13 +134,13 @@ def process():
         "Vendor repolist: {}".format([repo.repoid for repo in vendor_repos])
     )
 
-    # Setup repomap handler
-    repo_mappig_msg = next(api.consume(RepositoriesMapping), RepositoriesMapping())
+    # Setup repomap handler from combined repomapping message
+    repo_mapping_msg = combine_repomap_messages(repo_mapping_list)
 
     rhui_info = next(api.consume(RHUIInfo), None)
     cloud_provider = rhui_info.provider if rhui_info else ''
 
-    repomap = setuptargetrepos_repomap.RepoMapDataHandler(repo_mappig_msg, cloud_provider=cloud_provider)
+    repomap = setuptargetrepos_repomap.RepoMapDataHandler(repo_mapping_msg, cloud_provider=cloud_provider)
 
     # Filter set of repoids from installed packages so that it contains only repoids with mapping
     repoids_from_installed_packages_with_mapping = _get_mapped_repoids(repomap, repoids_from_installed_packages)
