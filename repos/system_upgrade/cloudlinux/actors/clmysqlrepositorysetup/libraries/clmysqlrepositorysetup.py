@@ -191,6 +191,9 @@ class MySqlRepositorySetupLibrary(object):
           baseurl = https://mariadb.gb.ssimn.org/yum/12.0/almalinux8-amd64/$releasever/$basearch
         We want to replace the parts of the url to make them work with target os version.
         """
+        if not mariadb_url:
+            api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
+            return None
 
         # Replace the first occurrence of source_major with target_major after 'yum'
         url_parts = mariadb_url.split("yum", 1)
@@ -202,10 +205,15 @@ class MySqlRepositorySetupLibrary(object):
             # Replace $releasever because upstream repos expect major version
             # and cloudlinux provides major.minor as $releasever
             url_parts[1] = url_parts[1].replace('$releasever', str(target_major))
-            return "yum".join(url_parts)
+            new_url = "yum".join(url_parts)
+            # Treat as unsupported if no version replacement was made (e.g. "example.com/mariadb/yum")
+            if new_url == mariadb_url and "/{}/".format(target_major) not in new_url:
+                api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
+                return None
+            return new_url
         else:
             api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
-            return
+            return None
 
     def mariadb_process(self, repofile_name, repofile_data):
         """
