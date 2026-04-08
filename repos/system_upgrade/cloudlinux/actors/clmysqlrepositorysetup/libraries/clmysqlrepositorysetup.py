@@ -152,10 +152,13 @@ class MySqlRepositorySetupLibrary(object):
                     ]
                 )
 
-            # mysqlclient is usually disabled when installed from CL MySQL Governor.
-            # However, it should be enabled for the Leapp upgrade, seeing as some packages
-            # from it won't update otherwise.
-            if target_repo.enabled or target_repo.repoid == "mysqclient-{}".format(target_major):
+            # Governor-managed MySQL/MariaDB repos may all be disabled, but we still
+            # need them enabled for the target system so DNF can upgrade the packages.
+            # Force-enable both cl-mysql-meta and mysqclient target repos.
+            if target_repo.enabled or target_repo.repoid in (
+                "mysqclient-{}".format(target_major),
+                "cl-mysql-meta-{}".format(target_major),
+            ):
                 api.current_logger().debug("Generating custom cl-mysql repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
@@ -172,14 +175,15 @@ class MySqlRepositorySetupLibrary(object):
                 # They'll be used to create a new custom repofile for the target userspace.
                 cl_target_repofile_list.append(target_repo)
 
-        if any(repo.enabled for repo in repofile_data.data):
-            self.mysql_types.add("cloudlinux")
-            # Provide the object with the modified repository data to the target userspace.
-            cl_target_repofile_data = RepositoryFile(data=cl_target_repofile_list, file=repofile_data.file)
-            leapp_repocopy = create_leapp_repofile_copy(cl_target_repofile_data, repofile_name)
-            api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
-        else:
-            api.current_logger().debug("No repos from CloudLinux repofile {} enabled, ignoring".format(repofile_name))
+        # Always register the cloudlinux type when CL MySQL/MariaDB is detected.
+        # Even if all repos in cl-mysql.repo are disabled (can happen with Governor),
+        # we still need the target repos for packages like mysqlclient that were
+        # installed from local RPMs and have no repo association.
+        self.mysql_types.add("cloudlinux")
+        # Provide the object with the modified repository data to the target userspace.
+        cl_target_repofile_data = RepositoryFile(data=cl_target_repofile_list, file=repofile_data.file)
+        leapp_repocopy = create_leapp_repofile_copy(cl_target_repofile_data, repofile_name)
+        api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
 
     def _make_upgrade_mariadb_url(self, mariadb_url, source_major, target_major):
         """
@@ -247,7 +251,7 @@ class MySqlRepositorySetupLibrary(object):
                             ),
                         ]
                     )
-                
+
                 api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
                 self.custom_repo_msgs.append(
                     CustomTargetRepository(
