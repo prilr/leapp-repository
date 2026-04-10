@@ -409,11 +409,9 @@ class MySqlRepositorySetupLibrary(object):
             if mod_name and mod_stream:
                 if self.clmysql_type not in MODULE_STREAMS:
                     api.current_logger().warning(
-                        "CL database type %s is not in MODULE_STREAMS; using derived DNF module %s:%s. "
-                        "Add an explicit MODULE_STREAMS entry when this stream is product-supported.",
-                        self.clmysql_type,
-                        mod_name,
-                        mod_stream,
+                        "CL database type {} is not in MODULE_STREAMS; using derived DNF module {}:{}. "
+                        "Add an explicit MODULE_STREAMS entry when this stream is product-supported."
+                        .format(self.clmysql_type, mod_name, mod_stream)
                     )
                     reporting.create_report(
                         [
@@ -438,9 +436,9 @@ class MySqlRepositorySetupLibrary(object):
                 )
             else:
                 api.current_logger().warning(
-                    "CL DB package type %s could not be mapped to a DNF module stream; "
-                    "skipping modules_to_enable for CloudLinux DB packages.",
-                    self.clmysql_type,
+                    "CL DB package type {} could not be mapped to a DNF module stream; "
+                    "skipping modules_to_enable for CloudLinux DB packages."
+                    .format(self.clmysql_type)
                 )
                 reporting.create_report(
                     [

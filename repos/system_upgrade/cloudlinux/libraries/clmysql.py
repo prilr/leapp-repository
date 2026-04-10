@@ -4,8 +4,12 @@ import shutil
 
 from leapp.libraries.stdlib import CalledProcessError, api, run
 
-# This file contains the data on the currently active MySQL installation type and version.
-CL7_MYSQL_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type"
+# MySQL Governor tracks the DB type in two files:
+#   mysql.type           — the *desired* type set by --mysql-version (may be ahead of reality)
+#   mysql.type.installed — the *actually installed* type, written after a successful --install
+# For Leapp we need what is really on disk, so we read mysql.type.installed.
+# Both files are present on CL7 and CL8+ when governor-mysql is installed.
+GOVERNOR_INSTALLED_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type.installed"
 
 # This dict matches the MySQL type strings with DNF module and stream IDs.
 MODULE_STREAMS = {
@@ -145,21 +149,54 @@ def get_pkg_prefix(clmysql_type):
     """
     Get a Yum package prefix string from cl-mysql type.
     """
-    if "mysql" in clmysql_type:
+    if clmysql_type.startswith("mysql"):
         return "cl-MySQL"
-    elif "mariadb" in clmysql_type:
+    elif clmysql_type.startswith("mariadb"):
         return "cl-MariaDB"
-    elif "percona" in clmysql_type:
+    elif clmysql_type.startswith("percona"):
         return "cl-Percona"
     else:
         return None
 
 
+def _get_clmysql_type_from_governor():
+    """
+    Read the actually installed DB type from the MySQL Governor cache file.
+
+    Governor stores the desired type in `mysql.type` (written by `--mysql-version`)
+    and the actually installed type in `mysql.type.installed` (written after a
+    successful `--install`).  We read the installed file so that a pending
+    `--mysql-version` that was never followed by `--install` does not mislead Leapp.
+
+    Returns a type string like `mariadb106`, or None when Governor is absent,
+    the file is missing/empty, or the value is `auto`.
+    """
+    if not os.path.isfile(GOVERNOR_INSTALLED_TYPE_FILE):
+        return None
+    try:
+        with open(GOVERNOR_INSTALLED_TYPE_FILE, "r") as f:
+            value = f.read().strip()
+    except (IOError, OSError) as err:
+        api.current_logger().warning(
+            "Could not read Governor mysql.type.installed file: {}".format(err)
+        )
+        return None
+    if not value or value == "auto":
+        return None
+    return value
+
+
 def get_clmysql_type():
     """
-    Get the currently active MySQL type from the Governor configuration file.
+    Get the currently active CL MySQL/MariaDB/Percona type.
+
+    Prefer the MySQL Governor config file (authoritative when Governor manages the DB),
+    fall back to detecting the type from the mysqld binary's RPM ownership.
     """
-    # if os.path.isfile(CL7_MYSQL_TYPE_FILE):
-    #     with open(CL7_MYSQL_TYPE_FILE, "r") as mysql_f:
-    #         return mysql_f.read()
+    governor_type = _get_clmysql_type_from_governor()
+    if governor_type:
+        api.current_logger().debug(
+            "CL-MySQL type from Governor file: {}".format(governor_type)
+        )
+        return governor_type
     return get_clmysql_version_from_pkg()
