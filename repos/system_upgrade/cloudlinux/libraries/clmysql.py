@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 
 from leapp.libraries.stdlib import CalledProcessError, api, run
 
@@ -57,25 +58,77 @@ def resolve_clmysql_module_stream(clmysql_type):
     return None, None
 
 
-def get_clmysql_version_from_pkg():
+def _resolve_mysqld_path():
     """
-    Detect the current installed CL-MySQL version.
+    Return absolute path to mysqld: PATH first, then usual daemon locations.
+    """
+    path = shutil.which("mysqld")
+    if path:
+        return path
+    for candidate in ("/usr/sbin/mysqld", "/usr/libexec/mysqld", "/usr/bin/mysqld"):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _clmysql_name_version_from_rpm(path):
+    """
+    Query the RPM that owns ``path`` and return (name_lower, version_lower) for the first
+    CloudLinux cl-{mariadb,mysql,percona} package when several packages claim the file.
     """
     try:
-        mysqld_safe_cmd = run(["which", "mysqld"])
+        rpm_out = run(
+            [
+                "rpm",
+                "-qf",
+                path,
+                "--queryformat",
+                "%{NAME} %{VERSION}\\n",
+            ]
+        )["stdout"]
     except CalledProcessError as err:
         api.current_logger().info(
-            "CL-MySQL version detection failed - unable to determine mysqld bin path: {}".format(str(err))
+            "Could not query RPM owner of mysqld path {0}: {1}".format(path, str(err))
         )
         return None
 
-    try:
-        rpm_qf_cmd = run(["rpm", "-qf", r'--qf="%{name} %{version}"', mysqld_safe_cmd["stdout"].strip()])
-    except CalledProcessError as err:
-        api.current_logger().info("Could not get CL-MySQL package version from RPM: {}".format(str(err)))
+    for line in rpm_out.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            api.current_logger().info(
+                "Unexpected rpm --queryformat line for {0!r}: {1!r}".format(path, line)
+            )
+            continue
+        name, version = parts[0].lower(), parts[1].lower()
+        if "cl-mariadb" in name or "cl-mysql" in name or "cl-percona" in name:
+            return name, version
+
+    return None
+
+
+def get_clmysql_version_from_pkg():
+    """
+    Detect the current installed CL-MySQL/MariaDB/Percona version from the mysqld binary.
+    """
+    mysqld_path = _resolve_mysqld_path()
+    if not mysqld_path:
+        api.current_logger().info(
+            "CL-MySQL version detection failed: mysqld not found in PATH or standard locations"
+        )
         return None
 
-    name, version = rpm_qf_cmd["stdout"].lower().split(" ")
+    pair = _clmysql_name_version_from_rpm(mysqld_path)
+    if not pair:
+        api.current_logger().info(
+            "CL-MySQL version detection failed: no CloudLinux cl-mysql/cl-mariadb/cl-percona "
+            "package owns {0}".format(mysqld_path)
+        )
+        return None
+
+    name, version = pair
     if "cl-mariadb" in name:
         name = "mariadb"
     elif "cl-mysql" in name:
@@ -83,7 +136,6 @@ def get_clmysql_version_from_pkg():
     elif "cl-percona" in name:
         name = "percona"
     else:
-        # non-CL SQL package
         return None
 
     return "%s%s" % (name, "".join(version.split(".")[:2]))
