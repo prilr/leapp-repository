@@ -1,4 +1,5 @@
 import os
+import re
 
 from leapp.libraries.stdlib import CalledProcessError, api, run
 
@@ -20,9 +21,40 @@ MODULE_STREAMS = {
     "mariadb104": "mariadb:cl-MariaDB104",
     "mariadb105": "mariadb:cl-MariaDB105",
     "mariadb106": "mariadb:cl-MariaDB106",
+    "mariadb1011": "mariadb:cl-MariaDB1011",
     "mariadb1104": "mariadb:cl-MariaDB1104",
     "percona56": "percona:cl-Percona56",
 }
+
+
+def resolve_clmysql_module_stream(clmysql_type):
+    """
+    Return (dnf_module_name, stream) for CloudLinux Governor MySQL/MariaDB/Percona types.
+
+    Prefer MODULE_STREAMS; if missing, derive stream from the type string (e.g. mariadb1012 ->
+    mariadb:cl-MariaDB1012) so newer CL releases work before this table is updated.
+    """
+    if not clmysql_type:
+        return None, None
+
+    entry = MODULE_STREAMS.get(clmysql_type)
+    if entry:
+        mod_name, mod_stream = entry.split(":", 1)
+        return mod_name, mod_stream
+
+    match = re.match(r"^(mariadb)(\d+)$", clmysql_type)
+    if match:
+        return "mariadb", "cl-MariaDB{}".format(match.group(2))
+
+    match = re.match(r"^(mysql)(\d+)$", clmysql_type)
+    if match:
+        return "mysql", "cl-MySQL{}".format(match.group(2))
+
+    match = re.match(r"^(percona)(\d+)$", clmysql_type)
+    if match:
+        return "percona", "cl-Percona{}".format(match.group(2))
+
+    return None, None
 
 
 def get_clmysql_version_from_pkg():
