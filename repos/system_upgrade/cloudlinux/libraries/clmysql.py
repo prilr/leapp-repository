@@ -1,8 +1,20 @@
+import collections
 import os
 import re
 import shutil
+from enum import Enum
 
 from leapp.libraries.stdlib import CalledProcessError, api, run
+
+
+class ClMysqlTypeStatus(Enum):
+    OK = "ok"
+    MISMATCH = "mismatch"
+
+
+ClMysqlTypeResult = collections.namedtuple(
+    "ClMysqlTypeResult", ["status", "governor_type", "pkg_type"]
+)
 
 # MySQL Governor tracks the DB type in two files:
 #   mysql.type           — the *desired* type set by --mysql-version (may be ahead of reality)
@@ -192,11 +204,33 @@ def get_clmysql_type():
 
     Prefer the MySQL Governor config file (authoritative when Governor manages the DB),
     fall back to detecting the type from the mysqld binary's RPM ownership.
+
+    When both sources are available, cross-check them. On mismatch, return a
+    result with :attr:`ClMysqlTypeStatus.MISMATCH` so the caller can raise an inhibitor.
+
+    :returns: :class:`ClMysqlTypeResult` with status, resolved type, and raw detection values.
     """
     governor_type = _get_clmysql_type_from_governor()
+    pkg_type = get_clmysql_version_from_pkg()
+
+    if governor_type and pkg_type and governor_type != pkg_type:
+        api.current_logger().warning(
+            "Governor mysql.type.installed says '{}' but RPM-based detection says '{}'."
+            .format(governor_type, pkg_type)
+        )
+        return ClMysqlTypeResult(
+            status=ClMysqlTypeStatus.MISMATCH,
+            governor_type=governor_type,
+            pkg_type=pkg_type,
+        )
+
     if governor_type:
         api.current_logger().debug(
             "CL-MySQL type from Governor file: {}".format(governor_type)
         )
-        return governor_type
-    return get_clmysql_version_from_pkg()
+
+    return ClMysqlTypeResult(
+        status=ClMysqlTypeStatus.OK,
+        governor_type=governor_type,
+        pkg_type=pkg_type,
+    )

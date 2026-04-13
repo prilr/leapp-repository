@@ -10,6 +10,7 @@ from leapp.libraries.common.cl_repofileutils import (
     create_leapp_repofile_copy,
 )
 from leapp.libraries.common.clmysql import (
+    ClMysqlTypeStatus,
     MODULE_STREAMS,
     get_clmysql_type,
     get_pkg_prefix,
@@ -106,7 +107,47 @@ class MySqlRepositorySetupLibrary(object):
         """
         Process CL-provided MySQL options.
         """
-        self.clmysql_type = get_clmysql_type()
+        detected = get_clmysql_type()
+
+        if detected.status == ClMysqlTypeStatus.MISMATCH:
+            reporting.create_report(
+                [
+                    reporting.Title(
+                        "Mismatch between Governor DB type and installed packages"
+                    ),
+                    reporting.Summary(
+                        "MySQL Governor records the installed database type as '{governor}', "
+                        "but the mysqld binary on disk belongs to '{rpm}'. "
+                        "This usually means 'mysqlgovernor.py --mysql-version' was run "
+                        "without a follow-up '--install', or packages were changed manually. "
+                        "Proceeding could enable the wrong DNF module stream and break the upgrade.".format(
+                            governor=detected.governor_type, rpm=detected.pkg_type
+                        )
+                    ),
+                    reporting.Severity(reporting.Severity.HIGH),
+                    reporting.Groups(
+                        [reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]
+                    ),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
+                    reporting.Remediation(
+                        hint=(
+                            "Examine the current state of the system's DB packages."
+                            "Complete the pending Governor install:\n"
+                            "  mysqlgovernor.py --mysql-version={governor}\n"
+                            "  mysqlgovernor.py --install --yes\n"
+                            "Or reset Governor to match the actual packages:\n"
+                            "  mysqlgovernor.py --mysql-version={rpm}\n"
+                            "  mysqlgovernor.py --install --yes\n"
+                            "Then restart the upgrade process.".format(
+                                governor=detected.governor_type, rpm=detected.pkg_type
+                            )
+                        )
+                    ),
+                ]
+            )
+            return
+
+        self.clmysql_type = detected.governor_type or detected.pkg_type
         if not self.clmysql_type:
             api.current_logger().warning("CL-MySQL type detection failed, skipping repository mapping")
             return
