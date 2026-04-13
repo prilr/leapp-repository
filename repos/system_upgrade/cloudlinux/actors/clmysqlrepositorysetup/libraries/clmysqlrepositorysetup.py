@@ -9,7 +9,13 @@ from leapp.libraries.common.cl_repofileutils import (
     REPOFILE_SUFFIX,
     create_leapp_repofile_copy,
 )
-from leapp.libraries.common.clmysql import MODULE_STREAMS, get_clmysql_type, get_pkg_prefix
+from leapp.libraries.common.clmysql import (
+    ClMysqlTypeStatus,
+    MODULE_STREAMS,
+    get_clmysql_type,
+    get_pkg_prefix,
+    resolve_clmysql_module_stream,
+)
 from leapp.libraries.common.config.version import get_source_major_version, get_target_major_version
 from leapp.libraries.stdlib import api
 from leapp.models import (
@@ -101,7 +107,47 @@ class MySqlRepositorySetupLibrary(object):
         """
         Process CL-provided MySQL options.
         """
-        self.clmysql_type = get_clmysql_type()
+        detected = get_clmysql_type()
+
+        if detected.status == ClMysqlTypeStatus.MISMATCH:
+            reporting.create_report(
+                [
+                    reporting.Title(
+                        "Mismatch between Governor DB type and installed packages"
+                    ),
+                    reporting.Summary(
+                        "MySQL Governor records the installed database type as '{governor}', "
+                        "but the mysqld binary on disk belongs to '{rpm}'. "
+                        "This usually means 'mysqlgovernor.py --mysql-version' was run "
+                        "without a follow-up '--install', or packages were changed manually. "
+                        "Proceeding could enable the wrong DNF module stream and break the upgrade.".format(
+                            governor=detected.governor_type, rpm=detected.pkg_type
+                        )
+                    ),
+                    reporting.Severity(reporting.Severity.HIGH),
+                    reporting.Groups(
+                        [reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]
+                    ),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
+                    reporting.Remediation(
+                        hint=(
+                            "Examine the current state of the system's DB packages."
+                            "Complete the pending Governor install:\n"
+                            "  mysqlgovernor.py --mysql-version={governor}\n"
+                            "  mysqlgovernor.py --install --yes\n"
+                            "Or reset Governor to match the actual packages:\n"
+                            "  mysqlgovernor.py --mysql-version={rpm}\n"
+                            "  mysqlgovernor.py --install --yes\n"
+                            "Then restart the upgrade process.".format(
+                                governor=detected.governor_type, rpm=detected.pkg_type
+                            )
+                        )
+                    ),
+                ]
+            )
+            return
+
+        self.clmysql_type = detected.governor_type or detected.pkg_type
         if not self.clmysql_type:
             api.current_logger().warning("CL-MySQL type detection failed, skipping repository mapping")
             return
@@ -399,15 +445,56 @@ class MySqlRepositorySetupLibrary(object):
                     ]
                 )
 
-        if "cloudlinux" in self.mysql_types and self.clmysql_type in MODULE_STREAMS.keys():
-            mod_name, mod_stream = MODULE_STREAMS[self.clmysql_type].split(":")
-            modules_to_enable = [Module(name=mod_name, stream=mod_stream)]
-            pkg_prefix = get_pkg_prefix(self.clmysql_type)
+        if "cloudlinux" in self.mysql_types and self.clmysql_type:
+            mod_name, mod_stream = resolve_clmysql_module_stream(self.clmysql_type)
+            if mod_name and mod_stream:
+                if self.clmysql_type not in MODULE_STREAMS:
+                    api.current_logger().warning(
+                        "CL database type {} is not in MODULE_STREAMS; using derived DNF module {}:{}. "
+                        "Add an explicit MODULE_STREAMS entry when this stream is product-supported."
+                        .format(self.clmysql_type, mod_name, mod_stream)
+                    )
+                    reporting.create_report(
+                        [
+                            reporting.Title("CloudLinux database module stream was derived automatically"),
+                            reporting.Summary(
+                                "The active CloudLinux MySQL/MariaDB/Percona type ({0}) has no explicit Leapp "
+                                "MODULE_STREAMS entry. Leapp will enable DNF module {1}:{2} derived from the "
+                                "detected type string. If the upgrade fails, confirm this module exists for the "
+                                "target OS and add MODULE_STREAMS in Leapp if the product stream name differs."
+                                .format(self.clmysql_type, mod_name, mod_stream)
+                            ),
+                            reporting.Severity(reporting.Severity.MEDIUM),
+                            reporting.Groups([reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]),
+                        ]
+                    )
 
-            api.current_logger().debug("Enabling DNF module: {}:{}".format(mod_name, mod_stream))
-            api.produce(
-                RpmTransactionTasks(to_upgrade=build_install_list(pkg_prefix), modules_to_enable=modules_to_enable)
-            )
+                api.current_logger().debug("Enabling DNF module: {}:{}".format(mod_name, mod_stream))
+                pkg_prefix = get_pkg_prefix(self.clmysql_type)
+                modules_to_enable = [Module(name=mod_name, stream=mod_stream)]
+                api.produce(
+                    RpmTransactionTasks(to_upgrade=build_install_list(pkg_prefix), modules_to_enable=modules_to_enable)
+                )
+            else:
+                api.current_logger().warning(
+                    "CL DB package type {} could not be mapped to a DNF module stream; "
+                    "skipping modules_to_enable for CloudLinux DB packages."
+                    .format(self.clmysql_type)
+                )
+                reporting.create_report(
+                    [
+                        reporting.Title("Unrecognized CloudLinux DB type for module enablement"),
+                        reporting.Summary(
+                            "A CloudLinux-provided DB repository was detected, but the active type "
+                            "({0}) does not match known MODULE_STREAMS and could not be converted to a DNF module "
+                            "name/stream. Leapp will not enable a DB module automatically; the upgrade "
+                            "may fail unless repositories and modules are corrected manually."
+                            .format(self.clmysql_type)
+                        ),
+                        reporting.Severity(reporting.Severity.HIGH),
+                        reporting.Groups([reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]),
+                    ]
+                )
 
         api.produce(
             InstalledMySqlTypes(
@@ -428,8 +515,7 @@ class MySqlRepositorySetupLibrary(object):
             full_repo_path = os.path.join(REPO_DIR, repofile_full)
             repofile_data = repofileutils.parse_repofile(full_repo_path)
 
-            # Parse any repository files that may have something to do with MySQL or MariaDB.
-
+            # Parse any CL repository files that may have something to do with MySQL or MariaDB.
             if any(mark in repofile_name for mark in CL_MARKERS):
                 api.current_logger().debug(
                     "Processing CL-related repofile {}, full path: {}".format(repofile_full, full_repo_path)

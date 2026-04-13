@@ -22,8 +22,8 @@ PYTEST_ARGS ?=
 PYLINT_ARGS ?=
 FLAKE8_ARGS ?=
 
-# python version to run test with
-_PYTHON_VENV=$${PYTHON_VENV:-python2.7}
+# python version to run tests with — auto-detect from OS major version when not set
+_PYTHON_VENV=$${PYTHON_VENV:-$$(rpm -E %{rhel} 2>/dev/null | grep -qE '^[89]' && echo python3.6 || echo python2.7)}
 
 ifdef ACTOR
 	TEST_PATHS=`$(_PYTHON_VENV) utils/actor_path.py $(ACTOR)`
@@ -292,6 +292,8 @@ install-deps:
 	case $(_PYTHON_VENV) in python3*) yum install -y ${shell echo $(_PYTHON_VENV) | tr -d .}; esac
 	@# in centos:7 python dependencies required gcc
 	case $(_PYTHON_VENV) in python3*) yum install gcc -y; esac
+	@# ensure virtualenv is available (not installed by default on EL8+)
+	command -v virtualenv >/dev/null 2>&1 || pip$$(echo $(_PYTHON_VENV) | sed 's/python//') install virtualenv
 	virtualenv -p /usr/bin/$(_PYTHON_VENV) $(VENVNAME); \
 	. $(VENVNAME)/bin/activate; \
 	pip install -U pip; \
