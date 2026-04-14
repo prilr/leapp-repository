@@ -17,8 +17,8 @@ ClMysqlTypeResult = collections.namedtuple(
 )
 
 # MySQL Governor tracks the DB type in two files:
-#   mysql.type           — the *desired* type set by --mysql-version (may be ahead of reality)
-#   mysql.type.installed — the *actually installed* type, written after a successful --install
+#   mysql.type           - the *desired* type set by --mysql-version (may be ahead of reality)
+#   mysql.type.installed - the *actually installed* type, written after a successful --install
 # For Leapp we need what is really on disk, so we read mysql.type.installed.
 # Both files are present on CL7 and CL8+ when governor-mysql is installed.
 GOVERNOR_INSTALLED_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type.installed"
