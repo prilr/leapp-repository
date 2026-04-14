@@ -1,4 +1,4 @@
-﻿from leapp.libraries.actor import scanrolloutrepositories
+from leapp.libraries.actor import scanrolloutrepositories
 from leapp.libraries.common import cl_repofileutils
 from leapp.libraries.common.testutils import produce_mocked
 from leapp.libraries.stdlib import api
@@ -34,14 +34,17 @@ class LoggerMocked(object):
 
 
 def test_valid_repofile_exists(monkeypatch):
-    def create_leapp_repofile_copy_mocked():
+    def create_leapp_repofile_copy_mocked(*args, **kwargs):
         return "/leapp_copy_path/newrepo.repo"
 
     monkeypatch.setattr(api, 'produce', produce_mocked())
-    monkeypatch.setattr(cl_repofileutils, 'create_leapp_repofile_copy', create_leapp_repofile_copy_mocked)
+    monkeypatch.setattr(
+        scanrolloutrepositories, 'create_leapp_repofile_copy',
+        create_leapp_repofile_copy_mocked,
+    )
     monkeypatch.setattr(api, 'current_logger', LoggerMocked())
 
-    scanrolloutrepositories.process_repodata(_REPOFILE)
+    scanrolloutrepositories.process_repodata(_REPOFILE, _REPOFILE.file)
 
     assert api.produce.called == len(_REPODATA) + 1
 
