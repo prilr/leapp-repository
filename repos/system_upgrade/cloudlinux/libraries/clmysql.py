@@ -1,10 +1,15 @@
 import collections
 import os
 import re
-import shutil
 from enum import Enum
 
+from leapp.libraries.common.config.version import get_source_major_version, get_target_major_version
 from leapp.libraries.stdlib import CalledProcessError, api, run
+from leapp.models import (
+    PESIDRepositoryEntry,
+    RepoMapEntry,
+    RepositoriesMapping,
+)
 
 
 class ClMysqlTypeStatus(Enum):
@@ -76,11 +81,18 @@ def resolve_clmysql_module_stream(clmysql_type):
 
 def _resolve_mysqld_path():
     """
-    Return absolute path to mysqld: PATH first, then usual daemon locations.
+    Return absolute path to mysqld: ``which`` first, then usual daemon locations.
+
+    Uses a subprocess call instead of :func:`shutil.which` so the code works on
+    Python 2.7 (EL7) where ``shutil.which`` does not exist.
     """
-    path = shutil.which("mysqld")
-    if path:
-        return path
+    try:
+        result = run(["which", "mysqld"])
+        path = result["stdout"].strip()
+        if path:
+            return path
+    except (CalledProcessError, OSError):
+        pass
     for candidate in ("/usr/sbin/mysqld", "/usr/libexec/mysqld", "/usr/bin/mysqld"):
         if os.path.isfile(candidate):
             return candidate
@@ -171,6 +183,40 @@ def get_pkg_prefix(clmysql_type):
         return None
 
 
+def get_expected_repo_url_fragment(clmysql_type):
+    """
+    Derive the expected cl-mysql-meta repo URL path fragment from the detected DB type.
+
+    Governor writes cl-mysql.repo with a baseurl like::
+
+        http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.6/$basearch/
+
+    The path component (``cl-mariadb-10.6``) is determined by the DB type.  This function
+    returns that expected fragment so callers can validate the repo URL.
+
+    :param clmysql_type: type string like ``mariadb106``, ``mysql57``, ``percona56``
+    :returns: expected path fragment like ``cl-mariadb-10.6``, or None if the type is
+              not recognised.
+    """
+    if not clmysql_type:
+        return None
+    # Match family + version digits: mariadb106 -> ("mariadb", "106")
+    m = re.match(r"^(mariadb|mysql|percona)(\d+)$", clmysql_type)
+    if not m:
+        return None
+    family, digits = m.group(1), m.group(2)
+    # Split digits into major.minor.  Governor concatenates major and minor:
+    #   "57" -> "5.7",  "80" -> "8.0"       (2-digit: single-digit major)
+    #   "106" -> "10.6", "100" -> "10.0"     (3-digit: two-digit major)
+    #   "1011" -> "10.11", "1104" -> "11.04" (4-digit: two-digit major)
+    # All known DB majors <= 2 digits; the split point is 1 for short, 2 otherwise.
+    if len(digits) <= 2:
+        major, minor = digits[:1], digits[1:]
+    else:
+        major, minor = digits[:2], digits[2:]
+    return "cl-{}-{}.{}".format(family, major, minor)
+
+
 def _get_clmysql_type_from_governor():
     """
     Read the actually installed DB type from the MySQL Governor cache file.
@@ -233,4 +279,38 @@ def get_clmysql_type():
         status=ClMysqlTypeStatus.OK,
         governor_type=governor_type,
         pkg_type=pkg_type,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Repository mapping helpers
+# ---------------------------------------------------------------------------
+
+def make_pesid_repo(pesid, major_version, repoid, arch='x86_64', repo_type='rpm', channel='ga', rhui=''):
+    """
+    PESIDRepositoryEntry factory function allowing shorter data description by providing default values.
+    """
+    return PESIDRepositoryEntry(
+        pesid=pesid,
+        major_version=major_version,
+        repoid=repoid,
+        arch=arch,
+        repo_type=repo_type,
+        channel=channel,
+        rhui=rhui
+    )
+
+
+def construct_repomap_data(source_id, target_id):
+    """
+    Construct the repository mapping data.
+    """
+    source_major = get_source_major_version()
+    target_major = get_target_major_version()
+    return RepositoriesMapping(
+        mapping=[RepoMapEntry(source=source_id, target=[target_id])],
+        repositories=[
+            make_pesid_repo(source_id, source_major, source_id),
+            make_pesid_repo(target_id, target_major, target_id)
+        ]
     )

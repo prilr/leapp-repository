@@ -8,6 +8,7 @@ from leapp.libraries.common.clmysql import (
     _get_clmysql_type_from_governor,
     _resolve_mysqld_path,
     get_clmysql_type,
+    get_expected_repo_url_fragment,
     get_pkg_prefix,
     resolve_clmysql_module_stream,
 )
@@ -68,11 +69,19 @@ class TestResolveClmysqlModuleStream(object):
 class TestResolveMysqldPath(object):
 
     def test_found_via_which(self, monkeypatch):
-        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/mysqld")
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql.run",
+            lambda cmd: {"stdout": "/usr/bin/mysqld\n"},
+        )
         assert _resolve_mysqld_path() == "/usr/bin/mysqld"
 
     def test_fallback_to_standard_location(self, monkeypatch):
-        monkeypatch.setattr("shutil.which", lambda _name: None)
+        from leapp.libraries.stdlib import CalledProcessError
+
+        def which_fails(cmd):
+            raise CalledProcessError("not found", cmd, {})
+
+        monkeypatch.setattr("leapp.libraries.common.clmysql.run", which_fails)
         # Only /usr/libexec/mysqld "exists"
         monkeypatch.setattr(
             "os.path.isfile",
@@ -81,7 +90,12 @@ class TestResolveMysqldPath(object):
         assert _resolve_mysqld_path() == "/usr/libexec/mysqld"
 
     def test_not_found(self, monkeypatch):
-        monkeypatch.setattr("shutil.which", lambda _name: None)
+        from leapp.libraries.stdlib import CalledProcessError
+
+        def which_fails(cmd):
+            raise CalledProcessError("not found", cmd, {})
+
+        monkeypatch.setattr("leapp.libraries.common.clmysql.run", which_fails)
         monkeypatch.setattr("os.path.isfile", lambda _p: False)
         assert _resolve_mysqld_path() is None
 
@@ -182,6 +196,40 @@ class TestGetClmysqlTypeFromGovernor(object):
             "leapp.libraries.common.clmysql.GOVERNOR_INSTALLED_TYPE_FILE", str(f)
         )
         assert _get_clmysql_type_from_governor() is None
+
+
+# ---------------------------------------------------------------------------
+# get_expected_repo_url_fragment
+# ---------------------------------------------------------------------------
+
+class TestGetExpectedRepoUrlFragment(object):
+    """Validate that the type-to-URL-fragment mapping matches Governor's REPO_NAMES."""
+
+    @pytest.mark.parametrize(
+        "clmysql_type,expected",
+        [
+            ("mysql51", "cl-mysql-5.1"),
+            ("mysql55", "cl-mysql-5.5"),
+            ("mysql57", "cl-mysql-5.7"),
+            ("mysql80", "cl-mysql-8.0"),
+            ("mysql84", "cl-mysql-8.4"),
+            ("mariadb55", "cl-mariadb-5.5"),
+            ("mariadb100", "cl-mariadb-10.0"),
+            ("mariadb106", "cl-mariadb-10.6"),
+            ("mariadb1011", "cl-mariadb-10.11"),
+            ("mariadb1104", "cl-mariadb-11.04"),
+            ("percona56", "cl-percona-5.6"),
+        ],
+    )
+    def test_known_types(self, clmysql_type, expected):
+        assert get_expected_repo_url_fragment(clmysql_type) == expected
+
+    @pytest.mark.parametrize(
+        "clmysql_type",
+        [None, "", "unknown", "postgres15"],
+    )
+    def test_unrecognised(self, clmysql_type):
+        assert get_expected_repo_url_fragment(clmysql_type) is None
 
 
 # ---------------------------------------------------------------------------
