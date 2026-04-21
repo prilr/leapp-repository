@@ -92,7 +92,7 @@ def clmysql_process(lib, repofile_name, repofile_data):
     expected_fragment = get_expected_repo_url_fragment(lib.clmysql_type)
     if expected_fragment:
         for repo_data in repofile_data.data:
-            if repo_data.repoid == "cl-mysql-meta" and expected_fragment not in repo_data.baseurl:
+            if repo_data.repoid == "cl-mysql-meta" and "/{}/".format(expected_fragment) not in repo_data.baseurl:
                 api.current_logger().warning(
                     "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "
                     "(expected '{}' in URL)."
@@ -126,8 +126,8 @@ def clmysql_process(lib, repofile_name, repofile_data):
                         reporting.Remediation(
                             hint=(
                                 "Re-run MySQL Governor to regenerate the repository file: "
-                                "mysqlgovernor.py --install --yes,"
-                                "then restart the upgrade process."
+                                "mysqlgovernor.py --install --yes, "
+                                "then restart the upgrade process. "
                                 "Alternatively, if the repository file was manually edited, "
                                 "either correct the baseurl to match the installed DB type or "
                                 "set the desired DB type in Governor and re-run --install "
