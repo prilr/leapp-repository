@@ -1,6 +1,6 @@
 import pytest
 
-from leapp.libraries.actor import clmysqlrepositorysetup
+from leapp.libraries.actor.clmysql_upstream_mariadb import _make_upgrade_mariadb_url
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,6 @@ from leapp.libraries.actor import clmysqlrepositorysetup
 )
 def test_make_upgrade_mariadb_url(source_url, source_major, target_major, expected_url):
     """Test URL transformation for various MariaDB repository URLs."""
-    library = clmysqlrepositorysetup.MySqlRepositorySetupLibrary()
-    result = library._make_upgrade_mariadb_url(source_url, source_major, target_major)
+    result = _make_upgrade_mariadb_url(source_url, source_major, target_major)
 
     assert result == expected_url

@@ -1,4 +1,11 @@
-import copy
+"""
+Coordinator for MySQL/MariaDB repository setup during CloudLinux ELevate upgrades.
+
+Delegates repo-specific logic to handler modules:
+  - clmysql_cloudlinux:       Governor-managed CL MySQL/MariaDB/Percona
+  - clmysql_upstream_mariadb: upstream mariadb.org repositories
+  - clmysql_upstream_mysql:   upstream mysql.com repositories
+"""
 import os
 
 from leapp import reporting
@@ -7,37 +14,28 @@ from leapp.libraries.common.cl_repofileutils import (
     LEAPP_COPY_SUFFIX,
     REPO_DIR,
     REPOFILE_SUFFIX,
-    create_leapp_repofile_copy,
 )
 from leapp.libraries.common.clmysql import (
-    ClMysqlTypeStatus,
     MODULE_STREAMS,
-    get_clmysql_type,
+    construct_repomap_data,
     get_pkg_prefix,
     resolve_clmysql_module_stream,
 )
-from leapp.libraries.common.config.version import get_source_major_version, get_target_major_version
 from leapp.libraries.stdlib import api
 from leapp.models import (
-    CustomTargetRepository,
-    CustomTargetRepositoryFile,
     InstalledMySqlTypes,
     InstalledRPM,
     Module,
-    PESIDRepositoryEntry,
-    RepoMapEntry,
-    RepositoriesMapping,
-    RepositoryFile,
     RpmTransactionTasks,
 )
+
+from leapp.libraries.actor.clmysql_cloudlinux import clmysql_process
+from leapp.libraries.actor.clmysql_upstream_mariadb import mariadb_process
+from leapp.libraries.actor.clmysql_upstream_mysql import mysql_process
 
 CL_MARKERS = ["cl-mysql", "cl-mariadb", "cl-percona"]
 MARIA_MARKERS = ["MariaDB"]
 MYSQL_MARKERS = ["mysql-community"]
-OLD_CLMYSQL_VERSIONS = ["5.0", "5.1"]
-OLD_MYSQL_UPSTREAM_VERSIONS_CL7 = ["5.7", "5.6", "5.5"]
-OLD_MYSQL_UPSTREAM_VERSIONS_CL8 = ["5.7", "5.6"]  # adjust as needed for CL8
-OLD_MARIADB_UPSTREAM_VERSIONS_CL8 = ["10.3", "10.4"]  # MariaDB versions to block for CL8 source
 
 
 def build_install_list(prefix):
@@ -58,36 +56,6 @@ def build_install_list(prefix):
     return to_upgrade
 
 
-def make_pesid_repo(pesid, major_version, repoid, arch='x86_64', repo_type='rpm', channel='ga', rhui=''):
-    """
-    PESIDRepositoryEntry factory function allowing shorter data description by providing default values.
-    """
-    return PESIDRepositoryEntry(
-        pesid=pesid,
-        major_version=major_version,
-        repoid=repoid,
-        arch=arch,
-        repo_type=repo_type,
-        channel=channel,
-        rhui=rhui
-    )
-
-
-def construct_repomap_data(source_id, target_id):
-    """
-    Construct the repository mapping data.
-    """
-    source_major = get_source_major_version()
-    target_major = get_target_major_version()
-    return RepositoriesMapping(
-        mapping=[RepoMapEntry(source=source_id, target=[target_id])],
-        repositories=[
-            make_pesid_repo(source_id, source_major, source_id),
-            make_pesid_repo(target_id, target_major, target_id)
-        ]
-    )
-
-
 class MySqlRepositorySetupLibrary(object):
     """
     Detect the various MySQL/MariaDB variants that may be installed on the system
@@ -102,304 +70,6 @@ class MySqlRepositorySetupLibrary(object):
         # Messages to send about custom generated package repositories.
         self.custom_repo_msgs = []
         self.mapping_msgs = []
-
-    def clmysql_process(self, repofile_name, repofile_data):
-        """
-        Process CL-provided MySQL options.
-        """
-        detected = get_clmysql_type()
-
-        if detected.status == ClMysqlTypeStatus.MISMATCH:
-            reporting.create_report(
-                [
-                    reporting.Title(
-                        "Mismatch between Governor DB type and installed packages"
-                    ),
-                    reporting.Summary(
-                        "MySQL Governor records the installed database type as '{governor}', "
-                        "but the mysqld binary on disk belongs to '{rpm}'. "
-                        "This usually means 'mysqlgovernor.py --mysql-version' was run "
-                        "without a follow-up '--install', or packages were changed manually. "
-                        "Proceeding could enable the wrong DNF module stream and break the upgrade.".format(
-                            governor=detected.governor_type, rpm=detected.pkg_type
-                        )
-                    ),
-                    reporting.Severity(reporting.Severity.HIGH),
-                    reporting.Groups(
-                        [reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]
-                    ),
-                    reporting.Groups([reporting.Groups.INHIBITOR]),
-                    reporting.Remediation(
-                        hint=(
-                            "Examine the current state of the system's DB packages."
-                            "Complete the pending Governor install:\n"
-                            "  mysqlgovernor.py --mysql-version={governor}\n"
-                            "  mysqlgovernor.py --install --yes\n"
-                            "Or reset Governor to match the actual packages:\n"
-                            "  mysqlgovernor.py --mysql-version={rpm}\n"
-                            "  mysqlgovernor.py --install --yes\n"
-                            "Then restart the upgrade process.".format(
-                                governor=detected.governor_type, rpm=detected.pkg_type
-                            )
-                        )
-                    ),
-                ]
-            )
-            return
-
-        self.clmysql_type = detected.governor_type or detected.pkg_type
-        if not self.clmysql_type:
-            api.current_logger().warning("CL-MySQL type detection failed, skipping repository mapping")
-            return
-        api.current_logger().debug("Detected CL-MySQL type: {}".format(self.clmysql_type))
-
-        data_to_log = [
-            (repo_data.repoid, "enabled" if repo_data.enabled else "disabled") for repo_data in repofile_data.data
-        ]
-
-        api.current_logger().debug("repoids from CloudLinux repofile {}: {}".format(repofile_name, data_to_log))
-
-        cl_target_repofile_list = []
-        target_major = get_target_major_version()
-
-        # Were any repositories enabled?
-        for source_repo in repofile_data.data:
-            # cl-mysql URLs look like this:
-            # baseurl=http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.3/$basearch/
-            # We don't want any duplicate repoid entries - they'd cause yum/dnf to fail.
-            # Make everything unique by adding -<target_major> to the repoid.
-            target_repo = copy.deepcopy(source_repo)
-            target_repo.repoid = "{}-{}".format(target_repo.repoid, target_major)
-            # releasever may be something like 8.6, while only 8 is acceptable.
-            target_repo.baseurl = target_repo.baseurl.replace("/cl$releasever/", "/cl{}/".format(target_major))
-
-            # Old CL MySQL versions (5.0 and 5.1) won't be available in CL8+.
-            if any(ver in target_repo.baseurl for ver in OLD_CLMYSQL_VERSIONS):
-                reporting.create_report(
-                    [
-                        reporting.Title("An old CL-MySQL version will no longer be available in EL{}".format(target_major)),
-                        reporting.Summary(
-                            "An old CloudLinux-provided MySQL version is installed on this system. "
-                            "It will no longer be available on the target system. "
-                            "This situation cannot be automatically resolved by Leapp. "
-                            "Problematic repository: {0}".format(target_repo.repoid)
-                        ),
-                        reporting.Severity(reporting.Severity.MEDIUM),
-                        reporting.Groups([reporting.Groups.REPOSITORY]),
-                        reporting.Groups([reporting.Groups.INHIBITOR]),
-                        reporting.Remediation(
-                            hint=(
-                                "Upgrade to a more recent MySQL version, or "
-                                "uninstall the deprecated MySQL packages and disable the repository. "
-                                "Note that you will also need to update any bindings (e.g., PHP or Python) "
-                                "that are dependent on this MySQL version."
-                            )
-                        ),
-                    ]
-                )
-
-            # Governor-managed MySQL/MariaDB repos may all be disabled, but we still
-            # need them enabled for the target system so DNF can upgrade the packages.
-            # Force-enable both cl-mysql-meta and mysqclient target repos.
-            if target_repo.enabled or target_repo.repoid in (
-                "mysqclient-{}".format(target_major),
-                "cl-mysql-meta-{}".format(target_major),
-            ):
-                api.current_logger().debug("Generating custom cl-mysql repo: {}".format(target_repo.repoid))
-                self.custom_repo_msgs.append(
-                    CustomTargetRepository(
-                        repoid=target_repo.repoid,
-                        name=target_repo.name,
-                        baseurl=target_repo.baseurl,
-                        enabled=True,
-                    )
-                )
-                self.mapping_msgs.append(
-                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
-                )
-                # Gather the enabled repositories for the new repofile.
-                # They'll be used to create a new custom repofile for the target userspace.
-                cl_target_repofile_list.append(target_repo)
-
-        # Always register the cloudlinux type when CL MySQL/MariaDB is detected.
-        # Even if all repos in cl-mysql.repo are disabled (can happen with Governor),
-        # we still need the target repos for packages like mysqlclient that were
-        # installed from local RPMs and have no repo association.
-        self.mysql_types.add("cloudlinux")
-        # Provide the object with the modified repository data to the target userspace.
-        cl_target_repofile_data = RepositoryFile(data=cl_target_repofile_list, file=repofile_data.file)
-        leapp_repocopy = create_leapp_repofile_copy(cl_target_repofile_data, repofile_name)
-        api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
-
-    def _make_upgrade_mariadb_url(self, mariadb_url, source_major, target_major):
-        """
-        Maria URLs look like this:
-          baseurl = https://archive.mariadb.org/mariadb-10.3/yum/centos/7/x86_64
-          baseurl = https://archive.mariadb.org/mariadb-10.7/yum/centos7-ppc64/
-          baseurl = https://distrohub.kyiv.ua/mariadb/yum/11.8/rhel/$releasever/$basearch
-          baseurl = https://mariadb.gb.ssimn.org/yum/12.0/centos/$releasever/$basearch
-          baseurl = https://mariadb.gb.ssimn.org/yum/12.0/almalinux8-amd64/$releasever/$basearch
-        We want to replace the parts of the url to make them work with target os version.
-        """
-
-        # Replace the first occurrence of source_major with target_major after 'yum'
-        url_parts = mariadb_url.split("yum", 1)
-        if len(url_parts) == 2:
-            # Replace major version in "/centos/7/" and /12.0/almalinux9-amd64/,
-            # but do not replace it in /mariadb-10.7/yum/
-            url_parts[1] = url_parts[1].replace("/{}/".format(source_major), "/{}/".format(target_major))
-            url_parts[1] = url_parts[1].replace("{}-".format(source_major), "{}-".format(target_major))
-            # Replace $releasever because upstream repos expect major version
-            # and cloudlinux provides major.minor as $releasever
-            url_parts[1] = url_parts[1].replace('$releasever', str(target_major))
-            return "yum".join(url_parts)
-        else:
-            api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
-            return
-
-    def mariadb_process(self, repofile_name, repofile_data):
-        """
-        Process upstream MariaDB options.
-
-        Versions of MariaDB installed from https://mariadb.org/.
-        """
-        cl_target_repofile_list = []
-        target_major = get_target_major_version()
-        source_major = get_source_major_version()
-
-        for source_repo in repofile_data.data:
-            target_repo = copy.deepcopy(source_repo)
-            target_repo.repoid = "{}-{}".format(target_repo.repoid, target_major)
-            target_repo.baseurl = self._make_upgrade_mariadb_url(source_repo.baseurl, source_major, target_major)
-
-            if target_repo.enabled:
-                # MariaDB 10.4 is not compatible with Leapp upgrade
-                if str(source_major) == "8" and any(ver in target_repo.baseurl for ver in OLD_MARIADB_UPSTREAM_VERSIONS_CL8):
-                    reporting.create_report(
-                        [
-                            reporting.Title("MariaDB version is not compatible with Leapp upgrade"),
-                            reporting.Summary(
-                                "MariaDB is installed on this system but its version is not compatible with Leapp upgrade process. "
-                                "The upgrade is blocked to prevent system instability. "
-                                "This situation cannot be automatically resolved by Leapp. "
-                                "Problematic repository: {0}".format(target_repo.repoid)
-                            ),
-                            reporting.Severity(reporting.Severity.MEDIUM),
-                            reporting.Groups([reporting.Groups.REPOSITORY]),
-                            reporting.Groups([reporting.Groups.INHIBITOR]),
-                            reporting.Remediation(
-                                hint=(
-                                    "Upgrade to a more recent MariaDB version, or "
-                                    "uninstall the MariaDB packages and disable the repository. "
-                                    "Note that you will also need to update any bindings (e.g., PHP or Python) "
-                                    "that are dependent on this MariaDB version."
-                                )
-                            ),
-                        ]
-                    )
-
-                api.current_logger().debug("Generating custom MariaDB repo: {}".format(target_repo.repoid))
-                self.custom_repo_msgs.append(
-                    CustomTargetRepository(
-                        repoid=target_repo.repoid,
-                        name=target_repo.name,
-                        baseurl=target_repo.baseurl,
-                        enabled=target_repo.enabled,
-                    )
-                )
-                self.mapping_msgs.append(
-                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
-                )
-                cl_target_repofile_list.append(target_repo)
-
-        if any(repo.enabled for repo in repofile_data.data):
-            # Since MariaDB URLs have major versions written in, we need a new repo file
-            # to feed to the target userspace.
-            self.mysql_types.add("mariadb")
-            cl_target_repofile_data = RepositoryFile(data=cl_target_repofile_list, file=repofile_data.file)
-            leapp_repocopy = create_leapp_repofile_copy(cl_target_repofile_data, repofile_name)
-            api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
-        else:
-            api.current_logger().debug("No repos from MariaDB repofile {} enabled, ignoring".format(repofile_name))
-
-    def mysql_process(self, repofile_name, repofile_data):
-        """
-        Process upstream MySQL options.
-
-        Versions of MySQL installed from https://mysql.com/.
-        """
-        cl_target_repofile_list = []
-        target_major = get_target_major_version()
-        source_major = get_source_major_version()
-
-        # Select the correct list of old MySQL versions for the source major version
-        if str(source_major) == "7":
-            old_mysql_versions = OLD_MYSQL_UPSTREAM_VERSIONS_CL7
-        else:
-            old_mysql_versions = OLD_MYSQL_UPSTREAM_VERSIONS_CL8
-
-        for source_repo in repofile_data.data:
-            # URLs look like this:
-            # baseurl = https://repo.mysql.com/yum/mysql-8.0-community/el/7/x86_64/
-            # Remember that we always want to modify names, to avoid "duplicate repository" errors.
-            target_repo = copy.deepcopy(source_repo)
-            target_repo.repoid = "{}-{}".format(target_repo.repoid, target_major)
-            # Replace /el/<source_major>/ with /el/<target_major>/
-            target_repo.baseurl = target_repo.baseurl.replace("/el/{}/".format(source_major), "/el/{}/".format(target_major))
-            # releasever may be something like 8.6, while only 8 is acceptable.
-            target_repo.baseurl = target_repo.baseurl.replace("/$releasever/", "/{}/".format(target_major))
-
-            if target_repo.enabled:
-                # MySQL package repos don't have these versions available for EL8 anymore.
-                # There's only 8.0 available.
-                # There'll be nothing to upgrade to.
-                # CL repositories do provide them, though.
-                if any(ver in target_repo.name for ver in old_mysql_versions):
-                    reporting.create_report(
-                        [
-                            reporting.Title("An old MySQL version will no longer be available in EL{}".format(target_major)),
-                            reporting.Summary(
-                                "A yum repository for an old MySQL version is enabled on this system. "
-                                "It will no longer be available on the target system. "
-                                "This situation cannot be automatically resolved by Leapp. "
-                                "Problematic repository: {0}".format(target_repo.repoid)
-                            ),
-                            reporting.Severity(reporting.Severity.MEDIUM),
-                            reporting.Groups([reporting.Groups.REPOSITORY]),
-                            reporting.Groups([reporting.Groups.INHIBITOR]),
-                            reporting.Remediation(
-                                hint=(
-                                    "Upgrade to a more recent MySQL version, "
-                                    "uninstall the deprecated MySQL packages and disable the repository, "
-                                    "or switch to CloudLinux MySQL Governor-provided version of MySQL to "
-                                    "continue using the old MySQL version."
-                                )
-                            ),
-                        ]
-                    )
-                api.current_logger().debug("Generating custom MySQL repo: {}".format(target_repo.repoid))
-                self.custom_repo_msgs.append(
-                    CustomTargetRepository(
-                        repoid=target_repo.repoid,
-                        name=target_repo.name,
-                        baseurl=target_repo.baseurl,
-                        enabled=target_repo.enabled,
-                    )
-                )
-                self.mapping_msgs.append(
-                    construct_repomap_data(source_repo.repoid, target_repo.repoid)
-                )
-                cl_target_repofile_list.append(target_repo)
-
-        if any(repo.enabled for repo in repofile_data.data):
-            # MySQL typically has multiple repo files, so we want to make sure we're
-            # adding the type to list only once.
-            self.mysql_types.add("mysql")
-            cl_target_repofile_data = RepositoryFile(data=cl_target_repofile_list, file=repofile_data.file)
-            leapp_repocopy = create_leapp_repofile_copy(cl_target_repofile_data, repofile_name)
-            api.produce(CustomTargetRepositoryFile(file=leapp_repocopy))
-        else:
-            api.current_logger().debug("No repos from MySQL repofile {} enabled, ignoring".format(repofile_name))
 
     def finalize(self):
         """Use the data collected to produce messages and reports."""
@@ -520,20 +190,20 @@ class MySqlRepositorySetupLibrary(object):
                 api.current_logger().debug(
                     "Processing CL-related repofile {}, full path: {}".format(repofile_full, full_repo_path)
                 )
-                self.clmysql_process(repofile_name, repofile_data)
+                clmysql_process(self, repofile_name, repofile_data)
 
             # Process MariaDB options.
             elif any(mark in repofile_name for mark in MARIA_MARKERS):
                 api.current_logger().debug(
                     "Processing MariaDB-related repofile {}, full path: {}".format(repofile_full, full_repo_path)
                 )
-                self.mariadb_process(repofile_name, repofile_data)
+                mariadb_process(self, repofile_name, repofile_data)
 
             # Process MySQL options.
             elif any(mark in repofile_name for mark in MYSQL_MARKERS):
                 api.current_logger().debug(
                     "Processing MySQL-related repofile {}, full path: {}".format(repofile_full, full_repo_path)
                 )
-                self.mysql_process(repofile_name, repofile_data)
+                mysql_process(self, repofile_name, repofile_data)
 
         self.finalize()
