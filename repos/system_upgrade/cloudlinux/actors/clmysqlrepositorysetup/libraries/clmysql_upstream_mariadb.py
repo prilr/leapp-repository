@@ -32,6 +32,7 @@ def _make_upgrade_mariadb_url(mariadb_url, source_major, target_major):
     We replace the parts of the URL to make them work with the target OS version.
     """
     if not mariadb_url:
+        api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
         return None
     # Replace the first occurrence of source_major with target_major after 'yum'
     url_parts = mariadb_url.split("yum", 1)
@@ -43,10 +44,15 @@ def _make_upgrade_mariadb_url(mariadb_url, source_major, target_major):
         # Replace $releasever because upstream repos expect major version
         # and cloudlinux provides major.minor as $releasever
         url_parts[1] = url_parts[1].replace('$releasever', str(target_major))
-        return "yum".join(url_parts)
+        new_url = "yum".join(url_parts)
+        # Treat as unsupported if no version replacement was made (e.g. "example.com/mariadb/yum")
+        if new_url == mariadb_url and "/{}/".format(target_major) not in new_url:
+            api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
+            return None
+        return new_url
     else:
         api.current_logger().warning("Unsupported repository URL={}, skipping".format(mariadb_url))
-        return
+        return None
 
 
 def mariadb_process(lib, repofile_name, repofile_data):

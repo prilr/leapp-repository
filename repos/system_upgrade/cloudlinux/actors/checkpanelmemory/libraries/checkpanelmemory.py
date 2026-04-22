@@ -55,6 +55,6 @@ def process():
                 reporting.Title(title),
                 reporting.Summary(summary),
                 reporting.Severity(reporting.Severity.HIGH),
-                reporting.Groups([reporting.Groups.SANITY]),
+                reporting.Groups([reporting.Groups.SANITY, reporting.Groups.INHIBITOR]),
             ]
         )
