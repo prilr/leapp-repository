@@ -254,8 +254,42 @@ fi
 
 echo "$OUT"
 
+PYFILES_CHANGED=$(grep -cE '^\+\+\+ b/.*\.py$' "$OUT" 2>/dev/null || true)
+
+# Both Python 2 and 3 cache compiled bytecode (.pyc/.pyo).  If the cached
+# timestamp matches the patched .py file's mtime, Python loads stale code.
+# Clean all bytecache so Python recompiles from the patched sources.
+NEEDS_PYC_CLEANUP=0
+if [[ "$PYFILES_CHANGED" -gt 0 ]]; then
+    NEEDS_PYC_CLEANUP=1
+    PYC_DIRS="${INSTALL_ROOT}"
+    [[ -n "$SITELIB" ]] && PYC_DIRS+=" ${SITELIB}/leapp/cli/commands"
+    PYC_CLEANUP_CMD="find ${PYC_DIRS} -name '*.pyc' -o -name '*.pyo' | xargs rm -f"
+fi
+
 cat >&2 <<EOF
 
-To apply:   patch -p1 -d / < $OUT
-To revert:  patch -R -p1 -d / < $OUT
+To apply:
+  patch -p1 -d / < $OUT
 EOF
+
+if [[ "$NEEDS_PYC_CLEANUP" -eq 1 ]]; then
+    cat >&2 <<EOF
+  $PYC_CLEANUP_CMD
+EOF
+fi
+
+cat >&2 <<EOF
+To revert:
+  patch -R -p1 -d / < $OUT
+EOF
+
+if [[ "$NEEDS_PYC_CLEANUP" -eq 1 ]]; then
+    cat >&2 <<EOF
+
+NOTE: This patch modifies $PYFILES_CHANGED Python file(s). Stale .pyc/.pyo
+bytecache can prevent the patched source from loading. The cleanup command
+above removes cached bytecode so Python recompiles from the patched .py
+files on next import.
+EOF
+fi
