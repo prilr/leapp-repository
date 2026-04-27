@@ -70,6 +70,10 @@ Summary: Leapp repositories for the in-place upgrade
 BuildRequires:  python-devel
 Requires:       python2-leapp
 
+# This rhn-client-tools version is the earliest one that has
+# the CLN switch functionality for CL7
+Requires:       rhn-client-tools >= 2.0.2-43
+
 # We should not drop this on RHEL 7 because of the compatibility reasons
 Obsoletes:      leapp-repository-data <= 0.6.1
 Provides:       leapp-repository-data <= 0.6.1
@@ -87,6 +91,10 @@ Conflicts:      leapp-upgrade-el8toel9
 ######### RHEL 8 ############
 BuildRequires:  python3-devel
 Requires:       python3-leapp
+
+# This rhn-client-tools version is the earliest one that has
+# the CLN switch functionality for CL8 and up
+Requires:       rhn-client-tools >= 2.8.16-14
 
 # Same as the conflict above - we want to be sure our packages are untouched
 # during the whole IPU process
