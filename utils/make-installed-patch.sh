@@ -253,3 +253,9 @@ else
 fi
 
 echo "$OUT"
+
+cat >&2 <<EOF
+
+To apply:   patch -p1 -d / < $OUT
+To revert:  patch -R -p1 -d / < $OUT
+EOF
