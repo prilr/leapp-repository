@@ -213,9 +213,24 @@ fi
 
 # --- report & dry-run --------------------------------------------------------
 #
-# Dry-run is informational. A failure usually means the host has
-# locally-modified files, or --from pointed at a variant that isn't
-# actually installed here.
+# Dry-run only makes sense when the patch targets *this* host's layout.
+# If we're cross-building (--from picked a variant that isn't installed
+# here, or no leapp-upgrade-* RPM is installed at all), a "success"
+# would just mean the diff happened not to touch any variant-specific
+# paths, and a "failure" would not mean the patch is wrong. Skip it.
+
+patch_targets_this_host() {
+    [[ -d "$INSTALL_ROOT" ]] || { echo "install_root missing: $INSTALL_ROOT"; return 1; }
+    [[ -z "$SITELIB" || -d "$SITELIB" ]] || { echo "sitelib missing: $SITELIB"; return 1; }
+    if [[ -n "$KEEP_SUBTREES" ]]; then
+        IFS=',' read -ra _keeps <<< "$KEEP_SUBTREES"
+        for t in "${_keeps[@]}"; do
+            [[ -d "$INSTALL_ROOT/system_upgrade/$t" ]] || {
+                echo "subtree not installed here: system_upgrade/$t"; return 1; }
+        done
+    fi
+    return 0
+}
 
 echo >&2
 echo "from_version = ${FROM_VERSION:-<autodetect>}" >&2
@@ -224,13 +239,17 @@ echo "sitelib      = ${SITELIB:-<unset, commands/* excluded>}" >&2
 echo "subtrees     = ${KEEP_SUBTREES:-<all>}" >&2
 echo >&2
 
-if command -v patch >/dev/null 2>&1; then
+if ! command -v patch >/dev/null 2>&1; then
+    : # no patch binary, nothing to do
+elif skip_reason=$(patch_targets_this_host); then
     echo "--- dry-run applying to / ---" >&2
     if patch --dry-run -p1 -d / < "$OUT" >&2; then
         echo "--- dry-run OK ---" >&2
     else
         echo "--- dry-run FAILED; inspect before applying ---" >&2
     fi
+else
+    echo "--- skipping dry-run: patch targets a layout other than this host ($skip_reason) ---" >&2
 fi
 
 echo "$OUT"
