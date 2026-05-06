@@ -10,10 +10,11 @@ from leapp.models import BootContent, KernelCmdlineArg, TargetKernelCmdlineArgTa
 def add_boot_entry(configs=None):
     debug = 'debug' if os.getenv('LEAPP_DEBUG', '0') == '1' else ''
     enable_network = os.getenv('LEAPP_DEVEL_INITRAM_NETWORK') in ('network-manager', 'scripts')
-    ip_arg = ' ip=dhcp rd.neednet=1' if enable_network else ''
+    ip_args = 'ip=dhcp rd.neednet=1' if enable_network else ''
     kernel_dst_path, initram_dst_path = get_boot_file_paths()
     _remove_old_upgrade_boot_entry(kernel_dst_path, configs=configs)
     try:
+        args_parts = [x for x in [debug, ip_args, 'enforcing=0 rd.plymouth=0 plymouth.enable=0'] if x]
         cmd = [
             '/usr/sbin/grubby',
             '--add-kernel', '{0}'.format(kernel_dst_path),
@@ -21,7 +22,7 @@ def add_boot_entry(configs=None):
             '--title', 'ELevate-Upgrade-Initramfs',
             '--copy-default',
             '--make-default',
-            '--args', '{DEBUG}{NET} enforcing=0 rd.plymouth=0 plymouth.enable=0'.format(DEBUG=debug, NET=ip_arg)
+            '--args', ' '.join(args_parts)
         ]
         if configs:
             for config in configs:
