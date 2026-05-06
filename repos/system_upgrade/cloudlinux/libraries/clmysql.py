@@ -43,7 +43,7 @@ MODULE_STREAMS = {
     "mariadb104": "mariadb:cl-MariaDB104",
     "mariadb105": "mariadb:cl-MariaDB105",
     "mariadb106": "mariadb:cl-MariaDB106",
-    "mariadb1011": "mariadb:cl-MariaDB1011",
+    "mariadb1011": "mariadb:10.11",
     "mariadb1104": "mariadb:cl-MariaDB1104",
     "percona56": "percona:cl-Percona56",
 }

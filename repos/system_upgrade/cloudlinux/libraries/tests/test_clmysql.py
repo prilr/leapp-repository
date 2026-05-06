@@ -28,7 +28,7 @@ class TestResolveClmysqlModuleStream(object):
             ("mysql55", ("mysql", "cl-MySQL55")),
             ("mysql80", ("mysql", "cl-MySQL80")),
             ("mariadb103", ("mariadb", "cl-MariaDB103")),
-            ("mariadb1011", ("mariadb", "cl-MariaDB1011")),
+            ("mariadb1011", ("mariadb", "10.11")),
             ("mariadb1104", ("mariadb", "cl-MariaDB1104")),
             ("percona56", ("percona", "cl-Percona56")),
         ],
