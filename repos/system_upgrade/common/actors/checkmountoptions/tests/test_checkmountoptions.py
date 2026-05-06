@@ -4,7 +4,7 @@ from functools import partial
 import pytest
 
 from leapp import reporting
-from leapp.libraries.actor.checkmountoptions import check_mount_options
+from leapp.libraries.actor.checkmountoptions import check_mount_options, check_netdev_mounts
 from leapp.libraries.common.testutils import create_report_mocked, CurrentActorMocked
 from leapp.libraries.stdlib import api
 from leapp.models import FstabEntry, MountEntry, StorageInfo
@@ -59,3 +59,39 @@ def test_var_mounted_with_noexec_is_detected(monkeypatch, fstab_entries, mounts,
     check_mount_options()
 
     assert bool(created_reports.called) == should_inhibit
+
+
+def _make_fstab_entry(fs_spec, fs_file, fs_mntops, fs_vfstype='ext4'):
+    return FstabEntry(fs_spec=fs_spec, fs_file=fs_file, fs_vfstype=fs_vfstype,
+                      fs_mntops=fs_mntops, fs_freq='0', fs_passno='0')
+
+
+@pytest.mark.parametrize(
+    ('fstab_mntops', 'initram_network_envar', 'should_inhibit'),
+    [
+        ('_netdev,defaults', None, True),
+        ('defaults,_netdev', None, True),
+        ('_netdev', None, True),
+        ('defaults', None, False),
+        ('netdev,defaults', None, False),
+        ('_netdev,defaults', '1', False),
+    ]
+)
+def test_netdev_in_fstab_is_detected(monkeypatch, fstab_mntops, initram_network_envar, should_inhibit):
+    fstab_entries = [
+        _make_fstab_entry('UUID=abc123', '/var/lib/psa/dumps', fstab_mntops),
+        _make_fstab_entry('/dev/sda1', '/', 'defaults'),
+    ]
+    storage_info = StorageInfo(fstab=fstab_entries)
+
+    envars = {'LEAPP_DEVEL_INITRAM_NETWORK': initram_network_envar} if initram_network_envar else {}
+    created_reports = create_report_mocked()
+    monkeypatch.setattr(api, 'current_actor', CurrentActorMocked(envars=envars))
+    monkeypatch.setattr(reporting, 'create_report', created_reports)
+
+    check_netdev_mounts(storage_info)
+
+    assert bool(created_reports.called) == should_inhibit
+    if should_inhibit:
+        assert '_netdev' in created_reports.report_fields['title']
+        assert 'UUID=abc123' in created_reports.report_fields['summary']
