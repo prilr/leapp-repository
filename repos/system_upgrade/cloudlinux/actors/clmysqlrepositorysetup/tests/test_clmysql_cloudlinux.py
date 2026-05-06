@@ -1,5 +1,5 @@
 """
-Regression tests for clmysql_cloudlinux.py — Governor-managed DB handler.
+Regression tests for clmysql_cloudlinux.py - Governor-managed DB handler.
 
 Key scenario (CLOS-2882): Governor writes cl-mysql.repo with both repos
 disabled (enabled=0).  The handler must still force-enable cl-mysql-meta-N
