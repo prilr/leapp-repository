@@ -6,18 +6,21 @@ from leapp.reporting import Report, create_report
 from leapp.tags import FirstBootPhaseTag, IPUWorkflowTag
 from leapp.libraries.common.cllaunch import run_on_cloudlinux
 from leapp.libraries.actor.updatecagefs import (
-    CAGEFSCTL, CAGEFS_UPDATE_LOG, start_cagefs_update
+    CAGEFSCTL, CAGEFS_UPDATE_LOG, CAGEFS_UPDATE_SERVICE, schedule_cagefs_update
 )
 
 
 class UpdateCagefs(Actor):
     """
-    Force update of cagefs.
+    Schedule a post-boot CageFS force-update.
 
-    cagefs should reflect massive changes in system made in previous phases.
-    The update runs asynchronously to avoid blocking the upgrade process, since
-    on servers with many users or large numbers of installed packages, cagefsctl
-    --force-update can take a very long time (potentially hours).
+    cagefs should reflect the massive package changes made in previous phases.
+    The update is registered as a one-shot systemd service that runs after
+    cagefs.service (which mounts the skeleton) so the skeleton is consistent
+    before --force-update begins.  The service runs in the background relative
+    to other multi-user.target services and self-disables on success.
+    On servers with many users or large numbers of installed packages,
+    cagefsctl --force-update can take a very long time (potentially hours).
     """
 
     name = 'update_cagefs'
@@ -30,14 +33,14 @@ class UpdateCagefs(Actor):
         if not os.path.exists(CAGEFSCTL):
             return
 
-        pid, error = start_cagefs_update()
+        error = schedule_cagefs_update()
 
         if error:
-            self.log.error('Failed to start cagefsctl --force-update: %s', error)
+            self.log.error('Failed to schedule cagefsctl --force-update: %s', error)
             create_report([
-                reporting.Title('Failed to start CageFS update'),
+                reporting.Title('Failed to schedule CageFS update'),
                 reporting.Summary(
-                    'Could not start "cagefsctl --force-update": {error}. '
+                    'Could not schedule "cagefsctl --force-update" as a systemd service: {error}. '
                     'Run "cagefsctl --force-update" manually after the upgrade.'.format(error=error)
                 ),
                 reporting.Severity(reporting.Severity.HIGH),
@@ -45,18 +48,18 @@ class UpdateCagefs(Actor):
             ])
             return
 
-        self.log.info('CageFS update started in background (PID: %d)', pid)
+        self.log.info('CageFS update scheduled as %s.service', CAGEFS_UPDATE_SERVICE)
         create_report([
-            reporting.Title('CageFS update is running in the background'),
+            reporting.Title('CageFS update scheduled'),
             reporting.Summary(
-                'The command "cagefsctl --force-update" was started in the background '
-                'to avoid blocking the upgrade process. '
+                'The command "cagefsctl --force-update" has been scheduled to run '
+                'after cagefs.service starts on the upgraded system. '
                 'On servers with many users or many installed packages, '
                 'this update can take a significant amount of time. '
-                'Monitor progress in: {log}. '
-                'If the update fails, run "cagefsctl --force-update" manually.'.format(
-                    log=CAGEFS_UPDATE_LOG
-                )
+                'Monitor progress in {log} or via '
+                '"journalctl -u {service}.service". '
+                'If the update fails, run "cagefsctl --force-update" '
+                'manually.'.format(log=CAGEFS_UPDATE_LOG, service=CAGEFS_UPDATE_SERVICE)
             ),
             reporting.Severity(reporting.Severity.INFO),
             reporting.Groups([reporting.Groups.POST]),
