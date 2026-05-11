@@ -185,6 +185,38 @@ def test_get_boot_file_paths(monkeypatch):
         addupgradebootentry.get_boot_file_paths()
 
 
+@pytest.mark.parametrize(
+    'firmware, mount, existing_efi_cfgs, expected',
+    [
+        # EFI firmware: hybrid path does not apply, even if /boot/efi is mounted
+        ('efi', True, ['/boot/efi/EFI/redhat/grub.cfg'], None),
+        # BIOS firmware but /boot/efi not mounted
+        ('bios', False, ['/boot/efi/EFI/centos/grub.cfg'], None),
+        # BIOS + /boot/efi mounted, redhat path (RHEL-derived systems)
+        ('bios', True, ['/boot/efi/EFI/redhat/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/redhat/grub.cfg']),
+        # BIOS + /boot/efi mounted, centos path (CL7 hybrid setups - was missed before)
+        ('bios', True, ['/boot/efi/EFI/centos/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/centos/grub.cfg']),
+        # BIOS + /boot/efi mounted, cloudlinux path (CL8+ hybrid setups - was missed before)
+        ('bios', True, ['/boot/efi/EFI/cloudlinux/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/cloudlinux/grub.cfg']),
+        # BIOS + /boot/efi mounted, almalinux path
+        ('bios', True, ['/boot/efi/EFI/almalinux/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/almalinux/grub.cfg']),
+        # BIOS + /boot/efi mounted, no known grub.cfg present
+        ('bios', True, [], None),
+        # BIOS + /boot/efi mounted, multiple paths present - redhat wins (checked first)
+        ('bios', True, ['/boot/efi/EFI/redhat/grub.cfg', '/boot/efi/EFI/centos/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/redhat/grub.cfg']),
+    ]
+)
+def test_get_hybrid_bios_efi_configs(monkeypatch, firmware, mount, existing_efi_cfgs, expected):
+    monkeypatch.setattr(os.path, 'ismount', lambda p: p == '/boot/efi' and mount)
+    monkeypatch.setattr(os.path, 'isfile', lambda p: p in existing_efi_cfgs)
+    assert addupgradebootentry.get_hybrid_bios_efi_configs(firmware) == expected
+
+
 @pytest.mark.skip("Broken test")
 @pytest.mark.parametrize(
     ('error_type', 'test_file_name'),

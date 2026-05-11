@@ -7,6 +7,28 @@ from leapp.libraries.stdlib import api, CalledProcessError, run
 from leapp.models import BootContent, KernelCmdlineArg, TargetKernelCmdlineArgTasks
 
 
+def get_hybrid_bios_efi_configs(firmware):
+    """
+    On a BIOS-firmware system with /boot/efi mounted, the EFI directory may also hold
+    a grub.cfg that GRUB consults at boot. grubby --copy-default --make-default only
+    updates /boot/grub2/grub.cfg by default; if the EFI-side grub.cfg is not also
+    updated, the new entry may not become the actual boot default.
+
+    The OS-name subdirectory under /boot/efi/EFI/ varies by distribution. Check the
+    known options and return the configs list for add_boot_entry, or None if no
+    EFI-side grub.cfg is present.
+
+    Related: https://bugzilla.redhat.com/show_bug.cgi?id=1667028
+    """
+    if firmware != 'bios' or not os.path.ismount('/boot/efi'):
+        return None
+    for efi_subdir in ('redhat', 'centos', 'cloudlinux', 'almalinux'):
+        efi_cfg = '/boot/efi/EFI/{0}/grub.cfg'.format(efi_subdir)
+        if os.path.isfile(efi_cfg):
+            return ['/boot/grub2/grub.cfg', efi_cfg]
+    return None
+
+
 def add_boot_entry(configs=None):
     debug = 'debug' if os.getenv('LEAPP_DEBUG', '0') == '1' else ''
     enable_network = os.getenv('LEAPP_DEVEL_INITRAM_NETWORK') in ('network-manager', 'scripts')
