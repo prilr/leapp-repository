@@ -1,8 +1,10 @@
-import os
-
 from leapp.actors import Actor
 from leapp.exceptions import StopActorExecutionError
-from leapp.libraries.actor.addupgradebootentry import add_boot_entry, fix_grub_config_error
+from leapp.libraries.actor.addupgradebootentry import (
+    add_boot_entry,
+    fix_grub_config_error,
+    get_hybrid_bios_efi_configs,
+)
 from leapp.models import BootContent, FirmwareFacts, GrubConfigError, TargetKernelCmdlineArgTasks, TransactionDryRun
 from leapp.tags import InterimPreparationPhaseTag, IPUWorkflowTag
 
@@ -24,7 +26,6 @@ class AddUpgradeBootEntry(Actor):
             if grub_config_error.error_detected:
                 fix_grub_config_error('/etc/default/grub', grub_config_error.error_type)
 
-        configs = None
         ff = next(self.consume(FirmwareFacts), None)
         if not ff:
             raise StopActorExecutionError(
@@ -32,8 +33,4 @@ class AddUpgradeBootEntry(Actor):
                 details={'details': 'Actor did not receive FirmwareFacts message.'}
             )
 
-        # related to issue with hybrid BIOS and UEFI images
-        # https://bugzilla.redhat.com/show_bug.cgi?id=1667028
-        if ff.firmware == 'bios' and os.path.ismount('/boot/efi') and os.path.isfile('/boot/efi/EFI/redhat/grub.cfg'):
-            configs = ['/boot/grub2/grub.cfg', '/boot/efi/EFI/redhat/grub.cfg']
-        add_boot_entry(configs)
+        add_boot_entry(get_hybrid_bios_efi_configs(ff.firmware))

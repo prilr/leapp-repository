@@ -38,7 +38,7 @@ run_args_remove = [
     '--remove-kernel', '/abc'
 ]
 
-run_args_add = [
+run_args_add_debug = [
     '/usr/sbin/grubby',
     '--add-kernel', '/abc',
     '--initrd', '/def',
@@ -49,16 +49,27 @@ run_args_add = [
     'debug enforcing=0 rd.plymouth=0 plymouth.enable=0'
     ]
 
+run_args_add_no_debug = [
+    '/usr/sbin/grubby',
+    '--add-kernel', '/abc',
+    '--initrd', '/def',
+    '--title', 'ELevate-Upgrade-Initramfs',
+    '--copy-default',
+    '--make-default',
+    '--args',
+    'enforcing=0 rd.plymouth=0 plymouth.enable=0'
+    ]
+
 run_args_zipl = ['/usr/sbin/zipl']
 
 
 @pytest.mark.parametrize('run_args, arch', [
     # non s390x
-    (RunArgs(run_args_remove, run_args_add, None, 2), ARCH_X86_64),
+    (RunArgs(run_args_remove, run_args_add_debug, None, 2), ARCH_X86_64),
     # s390x
-    (RunArgs(run_args_remove, run_args_add, run_args_zipl, 3), ARCH_S390X),
+    (RunArgs(run_args_remove, run_args_add_debug, run_args_zipl, 3), ARCH_S390X),
     # config file specified
-    (RunArgs(run_args_remove, run_args_add, None, 2), ARCH_X86_64),
+    (RunArgs(run_args_remove, run_args_add_debug, None, 2), ARCH_X86_64),
 ])
 def test_add_boot_entry(monkeypatch, run_args, arch):
     def get_boot_file_paths_mocked():
@@ -82,6 +93,27 @@ def test_add_boot_entry(monkeypatch, run_args, arch):
 
     if run_args.args_zipl:
         assert addupgradebootentry.run.args[2] == run_args.args_zipl
+
+
+def test_add_boot_entry_no_debug(monkeypatch):
+    """--args value must not have a leading space when LEAPP_DEBUG is unset (the common path)."""
+    def get_boot_file_paths_mocked():
+        return '/abc', '/def'
+
+    monkeypatch.setattr(addupgradebootentry, 'get_boot_file_paths', get_boot_file_paths_mocked)
+    monkeypatch.setattr(api, 'produce', produce_mocked())
+    monkeypatch.setenv('LEAPP_DEBUG', '0')
+    monkeypatch.setattr(addupgradebootentry, 'run', run_mocked())
+    monkeypatch.setattr(api, 'current_actor', CurrentActorMocked(ARCH_X86_64))
+
+    addupgradebootentry.add_boot_entry()
+
+    assert len(addupgradebootentry.run.args) == 2
+    assert addupgradebootentry.run.args[0] == run_args_remove
+    assert addupgradebootentry.run.args[1] == run_args_add_no_debug
+    # Confirm the --args value has no leading space.
+    grubby_args_value = addupgradebootentry.run.args[1][-1]
+    assert not grubby_args_value.startswith(' ')
 
 
 @pytest.mark.parametrize('is_leapp_invoked_with_debug', [True, False])
@@ -124,8 +156,8 @@ def test_add_boot_entry_configs(monkeypatch):
     assert len(addupgradebootentry.run.args) == 4
     assert addupgradebootentry.run.args[0] == run_args_remove + ['-c', CONFIGS[0]]
     assert addupgradebootentry.run.args[1] == run_args_remove + ['-c', CONFIGS[1]]
-    assert addupgradebootentry.run.args[2] == run_args_add + ['-c', CONFIGS[0]]
-    assert addupgradebootentry.run.args[3] == run_args_add + ['-c', CONFIGS[1]]
+    assert addupgradebootentry.run.args[2] == run_args_add_debug + ['-c', CONFIGS[0]]
+    assert addupgradebootentry.run.args[3] == run_args_add_debug + ['-c', CONFIGS[1]]
     assert api.produce.model_instances == [
         TargetKernelCmdlineArgTasks(to_remove=[KernelCmdlineArg(key='debug')]),
         TargetKernelCmdlineArgTasks(to_remove=[KernelCmdlineArg(key='enforcing', value='0')])
@@ -151,6 +183,38 @@ def test_get_boot_file_paths(monkeypatch):
 
     with pytest.raises(StopActorExecutionError):
         addupgradebootentry.get_boot_file_paths()
+
+
+@pytest.mark.parametrize(
+    'firmware, mount, existing_efi_cfgs, expected',
+    [
+        # EFI firmware: hybrid path does not apply, even if /boot/efi is mounted
+        ('efi', True, ['/boot/efi/EFI/redhat/grub.cfg'], None),
+        # BIOS firmware but /boot/efi not mounted
+        ('bios', False, ['/boot/efi/EFI/centos/grub.cfg'], None),
+        # BIOS + /boot/efi mounted, redhat path (RHEL-derived systems)
+        ('bios', True, ['/boot/efi/EFI/redhat/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/redhat/grub.cfg']),
+        # BIOS + /boot/efi mounted, centos path (CL7 hybrid setups - was missed before)
+        ('bios', True, ['/boot/efi/EFI/centos/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/centos/grub.cfg']),
+        # BIOS + /boot/efi mounted, cloudlinux path (CL8+ hybrid setups - was missed before)
+        ('bios', True, ['/boot/efi/EFI/cloudlinux/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/cloudlinux/grub.cfg']),
+        # BIOS + /boot/efi mounted, almalinux path
+        ('bios', True, ['/boot/efi/EFI/almalinux/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/almalinux/grub.cfg']),
+        # BIOS + /boot/efi mounted, no known grub.cfg present
+        ('bios', True, [], None),
+        # BIOS + /boot/efi mounted, multiple paths present - redhat wins (checked first)
+        ('bios', True, ['/boot/efi/EFI/redhat/grub.cfg', '/boot/efi/EFI/centos/grub.cfg'],
+         ['/boot/grub2/grub.cfg', '/boot/efi/EFI/redhat/grub.cfg']),
+    ]
+)
+def test_get_hybrid_bios_efi_configs(monkeypatch, firmware, mount, existing_efi_cfgs, expected):
+    monkeypatch.setattr(os.path, 'ismount', lambda p: p == '/boot/efi' and mount)
+    monkeypatch.setattr(os.path, 'isfile', lambda p: p in existing_efi_cfgs)
+    assert addupgradebootentry.get_hybrid_bios_efi_configs(firmware) == expected
 
 
 @pytest.mark.skip("Broken test")
