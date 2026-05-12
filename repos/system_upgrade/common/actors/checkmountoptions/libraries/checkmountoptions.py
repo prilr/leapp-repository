@@ -72,13 +72,19 @@ def check_noexec_on_var(storage_info):
 
 
 def check_netdev_mounts(storage_info):
-    """Check for fstab entries with the _netdev mount option."""
+    """Check for fstab entries with the _netdev mount option without nofail.
+
+    Entries combining _netdev with nofail are skipped: nofail tells systemd not
+    to fail the boot if the mount fails, so the upgrade can proceed even though
+    the network mount itself will not come up before the first reboot.
+    """
     if get_env('LEAPP_DEVEL_INITRAM_NETWORK', None):
         return
 
     netdev_entries = [
         entry for entry in storage_info.fstab
         if '_netdev' in entry.fs_mntops.split(',')
+        and 'nofail' not in entry.fs_mntops.split(',')
     ]
 
     if not netdev_entries:
@@ -94,15 +100,17 @@ def check_netdev_mounts(storage_info):
             'Detected _netdev mount option in /etc/fstab, preventing a successful in-place upgrade.'
         ),
         reporting.Summary(
-            'Leapp detected one or more entries in /etc/fstab using the _netdev mount option:\n{}\n\n'
-            'During the in-place upgrade, the system is disconnected from the network before the '
-            'first reboot. Entries with the _netdev option cannot be mounted at that point, which '
-            'causes the upgrade to fail.'.format(entries_str)
+            'Leapp detected one or more entries in /etc/fstab using the _netdev mount option '
+            'without nofail:\n{}\n\n'
+            'During the in-place upgrade, the system is disconnected from the network before '
+            'the first reboot. Entries with the _netdev option cannot be mounted at that point, '
+            'which causes the upgrade to fail.'.format(entries_str)
         ),
         reporting.Remediation(
             hint=(
-                'Remove the _netdev option from the affected /etc/fstab entries before proceeding '
-                'with the upgrade. Add it back after the upgrade is complete if needed.'
+                'Either remove the _netdev option from the affected /etc/fstab entries before '
+                'proceeding with the upgrade (and add it back afterwards if needed), or add the '
+                'nofail option so the boot does not fail when the network mount is unavailable.'
             )
         ),
         reporting.RelatedResource('file', '/etc/fstab'),

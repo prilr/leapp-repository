@@ -75,6 +75,9 @@ def _make_fstab_entry(fs_spec, fs_file, fs_mntops, fs_vfstype='ext4'):
         ('defaults', None, False),
         ('netdev,defaults', None, False),
         ('_netdev,defaults', '1', False),
+        ('_netdev,nofail', None, False),
+        ('nofail,_netdev,defaults', None, False),
+        ('_netdev,nofail,defaults', None, False),
     ]
 )
 def test_netdev_in_fstab_is_detected(monkeypatch, fstab_mntops, initram_network_envar, should_inhibit):
