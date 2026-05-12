@@ -1,4 +1,5 @@
 from leapp import reporting
+from leapp.libraries.common.config import get_env
 from leapp.libraries.stdlib import api
 from leapp.models import StorageInfo
 
@@ -70,6 +71,56 @@ def check_noexec_on_var(storage_info):
             return
 
 
+def check_netdev_mounts(storage_info):
+    """Check for fstab entries with the _netdev mount option without nofail.
+
+    Entries combining _netdev with nofail are skipped: nofail tells systemd not
+    to fail the boot if the mount fails, so the upgrade can proceed even though
+    the network mount itself will not come up before the first reboot.
+    """
+    if get_env('LEAPP_DEVEL_INITRAM_NETWORK', None):
+        return
+
+    netdev_entries = [
+        entry for entry in storage_info.fstab
+        if '_netdev' in entry.fs_mntops.split(',')
+        and 'nofail' not in entry.fs_mntops.split(',')
+    ]
+
+    if not netdev_entries:
+        return
+
+    entries_str = '\n'.join(
+        '- {} (mounted at {})'.format(entry.fs_spec, entry.fs_file)
+        for entry in netdev_entries
+    )
+
+    reporting.create_report([
+        reporting.Title(
+            'Detected _netdev mount option in /etc/fstab, preventing a successful in-place upgrade.'
+        ),
+        reporting.Summary(
+            'Leapp detected one or more entries in /etc/fstab using the _netdev mount option '
+            'without nofail:\n{}\n\n'
+            'During the in-place upgrade, the system is disconnected from the network before '
+            'the first reboot. Entries with the _netdev option cannot be mounted at that point, '
+            'which causes the upgrade to fail.'.format(entries_str)
+        ),
+        reporting.Remediation(
+            hint=(
+                'Either remove the _netdev option from the affected /etc/fstab entries before '
+                'proceeding with the upgrade (and add it back afterwards if needed), or add the '
+                'nofail option so the boot does not fail when the network mount is unavailable.'
+            )
+        ),
+        reporting.RelatedResource('file', '/etc/fstab'),
+        reporting.Severity(reporting.Severity.HIGH),
+        reporting.Groups([reporting.Groups.FILESYSTEM, reporting.Groups.NETWORK]),
+        reporting.Groups([reporting.Groups.INHIBITOR]),
+    ])
+
+
 def check_mount_options():
     for storage_info in api.consume(StorageInfo):
         check_noexec_on_var(storage_info)
+        check_netdev_mounts(storage_info)

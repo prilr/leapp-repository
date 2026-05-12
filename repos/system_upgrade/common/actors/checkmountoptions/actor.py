@@ -11,6 +11,7 @@ class CheckMountOptions(Actor):
 
     Checks performed:
         - /var is mounted with the noexec option
+        - any fstab entry uses the _netdev mount option
     """
     name = "check_mount_options"
     consumes = (StorageInfo,)
