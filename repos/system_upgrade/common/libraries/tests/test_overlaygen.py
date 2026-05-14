@@ -1,9 +1,7 @@
 import os
 
-import pytest
-
 from leapp.libraries.common import overlaygen
-from leapp.libraries.common.testutils import CurrentActorMocked, logger_mocked
+from leapp.libraries.common.testutils import CurrentActorMocked
 from leapp.libraries.stdlib import api
 from leapp.models import FstabEntry, StorageInfo
 
@@ -46,10 +44,12 @@ class TestGetMaxDiskimageSizeMibs(object):
         result = overlaygen._get_max_diskimage_size_mibs('/some/dir')
         assert result is None
 
-    def test_returns_none_when_pathconf_missing(self, monkeypatch):
+    def test_returns_none_when_pathconf_raises_attribute_error(self, monkeypatch):
+        def raise_attribute_error(path, name):
+            raise AttributeError('not available')
+
         monkeypatch.setattr(api, 'current_actor', CurrentActorMocked())
-        # Simulate AttributeError by making pathconf raise it
-        monkeypatch.setattr(os, 'pathconf', lambda path, name: (_ for _ in ()).throw(AttributeError()))
+        monkeypatch.setattr(os, 'pathconf', raise_attribute_error)
         result = overlaygen._get_max_diskimage_size_mibs('/some/dir')
         assert result is None
 
