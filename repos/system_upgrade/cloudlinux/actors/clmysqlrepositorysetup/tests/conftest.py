@@ -70,14 +70,14 @@ def make_cl_mysql_repofile():
     """Return a factory that builds a Governor-style cl-mysql.repo RepositoryFile."""
     from leapp.models import RepositoryData, RepositoryFile
 
-    def _make(cl_mysql_meta_enabled=True, mysqlclient_enabled=False):
+    def _make(cl_mysql_meta_enabled=True, mysqlclient_enabled=False, cl_mysql_meta_baseurl=None):
         return RepositoryFile(
             file="cl-mysql.repo",
             data=[
                 RepositoryData(
                     repoid="cl-mysql-meta",
                     name="cl-mysql",
-                    baseurl=_MARIADB106_META_BASEURL,
+                    baseurl=cl_mysql_meta_baseurl or _MARIADB106_META_BASEURL,
                     enabled=cl_mysql_meta_enabled,
                 ),
                 RepositoryData(
