@@ -12,9 +12,19 @@ report_server_inst_summary = (
 )
 
 report_server_inst_hint = (
-    'Back up your data before proceeding with the upgrade'
-    ' and follow steps in the documentation section "Migrating to a RHEL 8 version of PostgreSQL"'
-    ' after the upgrade.'
+    'Back up your data before proceeding with the upgrade.'
+    ' The upgrade keeps your PostgreSQL data directory in the old (9.2)'
+    ' on-disk format - postgresql will refuse to start on the upgraded'
+    ' system until you migrate the data. After the upgrade completes:\n'
+    '  1. Install the postgresql-upgrade package (provides the old'
+    ' server binaries needed by the migration helper):\n'
+    '       dnf install postgresql-upgrade\n'
+    '  2. Migrate the database files to the new format:\n'
+    '       postgresql-setup --upgrade\n'
+    '  3. Start PostgreSQL:\n'
+    '       systemctl start postgresql\n'
+    'For more details see the documentation section'
+    ' "Migrating to a RHEL 8 version of PostgreSQL".'
 )
 
 # Link URL for postgresql-server report
