@@ -141,6 +141,27 @@ def get_recommended_leapp_free_space(userspace_path=None):
     return prot_size
 
 
+def _get_max_diskimage_size_mibs(directory):
+    """
+    Return the maximum sparse file size in MiB supported by the filesystem at `directory`.
+
+    Uses PC_FILESIZEBITS (number of bits in a file offset) to derive the limit.
+    Example: ext4 with 4K blocks reports 44 bits -> max 16 TiB.
+
+    Returns None if the limit cannot be determined, in which case no capping is applied.
+    """
+    try:
+        filesizebits = os.pathconf(directory, 'PC_FILESIZEBITS')
+        return (2 ** filesizebits - 1) // (1024 * 1024)
+    except (AttributeError, ValueError, OSError):
+        api.current_logger().warning(
+            'Cannot determine filesystem file size limit for %s.'
+            ' Disk image sizes will not be capped by filesystem limit.',
+            directory
+        )
+        return None
+
+
 def _get_fspace(path, convert_to_mibs=False, coefficient=1):
     """
     Return the free disk space on given path.
@@ -279,6 +300,7 @@ def _prepare_required_mounts(scratch_dir, mounts_dir, storage_info, scratch_rese
     # as disk images are cleaned in the end of this functions,
     # but we want to reserve some space in advance.
     scratch_disk_size = _get_fspace(scratch_dir, convert_to_mibs=True) - scratch_reserve
+    max_image_size_mibs = _get_max_diskimage_size_mibs(disk_images_directory)
 
     result = {}
     for mountpoint in mount_points:
@@ -286,6 +308,13 @@ def _prepare_required_mounts(scratch_dir, mounts_dir, storage_info, scratch_rese
         disk_size = _get_fspace(mountpoint, convert_to_mibs=True, coefficient=0.95)
         if mountpoint == scratch_mp:
             disk_size = scratch_disk_size
+        if max_image_size_mibs is not None and disk_size > max_image_size_mibs:
+            api.current_logger().warning(
+                'Disk image size for %s (%d MiB) exceeds filesystem file size limit (%d MiB).'
+                ' Capping to filesystem limit.',
+                mountpoint, disk_size, max_image_size_mibs
+            )
+            disk_size = max_image_size_mibs
         image = _create_mount_disk_image(disk_images_directory, mountpoint, disk_size)
         result[mountpoint] = mounting.LoopMount(
             source=image,
