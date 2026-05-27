@@ -31,6 +31,10 @@ from leapp.models import (
         ["masked", "enable", "disable", "masked"],
         ["disabled", "enable", "enable", "disabled"],
         ["disabled", "enable", "disable", "disabled"],
+        # Unit absent on the source system (new on target): apply the target
+        # preset, replicating what a fresh package install would do.
+        [None, "disable", "enable", "enabled"],
+        [None, "disable", "disable", None],
     ),
 )
 def test_get_desired_service_state(
@@ -75,15 +79,15 @@ def test_filter_irrelevant_services_services_filtered():
         "test3.service": "masked",
         "test4.service": "indirect",
         "test5.service": "indirect",
-        "test6.service": "indirect",
+        "test6.service": "masked-runtime",
     }
     services_target = [
-        SystemdServiceFile(name="test1.service", state="enabled"),
         SystemdServiceFile(name="test2.service", state="masked"),
         SystemdServiceFile(name="test3.service", state="indirect"),
         SystemdServiceFile(name="test4.service", state="static"),
         SystemdServiceFile(name="test5.service", state="generated"),
-        SystemdServiceFile(name="test6.service", state="masked-runtime"),
+        # Enable-able target state, but masked-runtime on the source -> filtered
+        SystemdServiceFile(name="test6.service", state="enabled"),
     ]
 
     filtered = transitionsystemdservicesstates._filter_irrelevant_services(
@@ -91,6 +95,23 @@ def test_filter_irrelevant_services_services_filtered():
     )
 
     assert not filtered
+
+
+def test_filter_irrelevant_services_keeps_new_target_units():
+    # Units absent on the source but in an enable/disable-able state are new on
+    # the target and must be kept so the target preset can be applied to them.
+    services_source = {}
+    services_target = [
+        SystemdServiceFile(name="new-enabled.service", state="enabled"),
+        SystemdServiceFile(name="new-disabled.timer", state="disabled"),
+        SystemdServiceFile(name="new-static.service", state="static"),
+    ]
+
+    filtered = transitionsystemdservicesstates._filter_irrelevant_services(
+        services_source, services_target
+    )
+
+    assert [s.name for s in filtered] == ["new-enabled.service", "new-disabled.timer"]
 
 
 def test_filter_irrelevant_services_services_not_filtered():
@@ -176,6 +197,52 @@ def test_tasks_produced_reports_created(monkeypatch):
     assert api.produce.called
     assert api.produce.model_instances[0].to_enable == expected_tasks.to_enable
     assert api.produce.model_instances[0].to_disable == expected_tasks.to_disable
+
+
+def test_new_target_unit_enabled_by_preset(monkeypatch):
+    """
+    A unit that does not exist on the source but is shipped enabled-by-preset on
+    the target (e.g. logrotate.timer on EL8->EL9) must be enabled, even though it
+    was left disabled by the package upgrade scriptlet.
+    """
+    service_info_source = SystemdServicesInfoSource(service_files=[
+        SystemdServiceFile(name="test.service", state="enabled"),
+    ])
+    preset_info_source = SystemdServicesPresetInfoSource(presets=[
+        SystemdServicePreset(service="test.service", state="enable"),
+    ])
+
+    services_target = [
+        SystemdServiceFile(name="test.service", state="enabled"),
+        # New unit, left disabled by the upgrade (preset not applied on upgrade)
+        SystemdServiceFile(name="logrotate.timer", state="disabled"),
+    ]
+    service_info_target = SystemdServicesInfoTarget(service_files=services_target)
+    preset_info_target = SystemdServicesPresetInfoTarget(presets=[
+        SystemdServicePreset(service="test.service", state="enable"),
+        SystemdServicePreset(service="logrotate.timer", state="enable"),
+    ])
+
+    monkeypatch.setattr(
+        api,
+        "current_actor",
+        CurrentActorMocked(
+            msgs=[
+                service_info_source,
+                service_info_target,
+                preset_info_source,
+                preset_info_target,
+            ]
+        ),
+    )
+    monkeypatch.setattr(api, "produce", produce_mocked())
+    monkeypatch.setattr(reporting, "create_report", create_report_mocked())
+
+    transitionsystemdservicesstates.process()
+
+    assert api.produce.called
+    assert api.produce.model_instances[0].to_enable == ["logrotate.timer"]
+    assert api.produce.model_instances[0].to_disable == []
 
 
 @pytest.mark.parametrize(
