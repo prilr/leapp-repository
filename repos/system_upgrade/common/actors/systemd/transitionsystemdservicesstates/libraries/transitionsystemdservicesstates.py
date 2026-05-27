@@ -17,11 +17,22 @@ def _get_desired_service_state(state_source, preset_source, preset_target):
     """
     Get the desired service state on the target system
 
-    :param state_source: State on the source system
+    :param state_source: State on the source system, or None if the unit does
+        not exist on the source system (it is new on the target)
     :param preset_source: Preset on the source system
     :param preset_target: Preset on the target system
-    :return: The desired state on the target system
+    :return: The desired state on the target system, or None for no-op
     """
+
+    if state_source is None:
+        # The unit is new on the target system (no equivalent on the source).
+        # The package upgrade scriptlets apply vendor presets only on a fresh
+        # install, not when an existing package merely gains a new unit (e.g.
+        # logrotate.timer on EL8->EL9). Replicate what a fresh install would do
+        # by honoring the target preset; leave non-enabled presets untouched.
+        if preset_target == "enable":
+            return "enabled"
+        return None
 
     if state_source in ("disabled", "enabled-runtime"):
         if preset_source == "disable":
@@ -111,8 +122,10 @@ def _filter_irrelevant_services(services_source, services_target):
     """
     Filter out irrelevant services
 
-    Irrelevant services are those that cannot be enabled/disabled,
-    those that do not exist on the source system and those in masked-runtime state.
+    Irrelevant services are those that cannot be enabled/disabled and those in
+    masked-runtime state. Services that do not exist on the source system are
+    kept: they are new on the target and the desired-state logic decides whether
+    to enable them based on the target preset.
 
     :return: Target system services without the irrelevant ones.
     :rtype: list
@@ -124,9 +137,6 @@ def _filter_irrelevant_services(services_source, services_target):
             continue
 
         state_source = services_source.get(service.name)
-        if not state_source:
-            # The service doesn't exist on the source system
-            continue
 
         if state_source == "masked-runtime":
             # TODO(mmatuska): It's not possible to get the persistent
@@ -185,7 +195,7 @@ def _report_kept_enabled(tasks):
 def _get_newly_enabled(services_source, desired_states):
     newly_enabled = []
     for service, state in desired_states.items():
-        state_source = services_source[service]
+        state_source = services_source.get(service)
         if state_source == "disabled" and state == "enabled":
             newly_enabled.append(service)
 
