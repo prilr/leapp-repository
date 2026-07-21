@@ -1224,3 +1224,55 @@ def test_perform_ok(monkeypatch):
     assert userspacegen.api.produce.model_instances[1] == msg_target_repos
     # this one is full of constants, so it's safe to check just the instance
     assert isinstance(userspacegen.api.produce.model_instances[2], models.TargetUserSpaceInfo)
+
+
+class _RecordingContext(object):
+    """Minimal context stub that records the commands passed to call()."""
+    base_dir = '/base'
+
+    def __init__(self):
+        self.commands = []
+
+    def call(self, cmd, **dummy_kwargs):
+        self.commands.append(cmd)
+        return {'stdout': '', 'stderr': ''}
+
+
+class _NoopBindMount(object):
+    def __init__(self, **dummy_kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *dummy_args):
+        return False
+
+
+def test_prepare_target_userspace_allows_erasing_conflicts(monkeypatch):
+    """
+    The preliminary cloudlinux-release localinstall runs against the source
+    overlay, where legacy packages the target release Conflicts with (e.g.
+    rhn-client-tools < 2.11.5 on CL7) are still present with no upgrade
+    candidate. It must pass --allowerasing so dnf can resolve the conflict in
+    the throwaway overlay instead of crashing target_userspace_creator
+    (ZD 287724).
+    """
+    context = _RecordingContext()
+    monkeypatch.setattr(userspacegen, '_backup_to_persistent_package_cache', lambda *a, **k: None)
+    monkeypatch.setattr(userspacegen, '_restore_persistent_package_cache', lambda *a, **k: None)
+    monkeypatch.setattr(userspacegen, '_create_target_userspace_directories', lambda *a, **k: None)
+    monkeypatch.setattr(userspacegen, 'run', lambda *a, **k: None)
+    monkeypatch.setattr(userspacegen, 'is_nogpgcheck_set', lambda: True)
+    monkeypatch.setattr(userspacegen, 'enable_spacewalk_module', lambda ctx: None)
+    monkeypatch.setattr(userspacegen, 'get_target_major_version', lambda: '8')
+    monkeypatch.setattr(userspacegen.mounting, 'BindMount', _NoopBindMount)
+    monkeypatch.setattr(userspacegen.rhsm, 'skip_rhsm', lambda: False)
+    monkeypatch.setattr(userspacegen.api, 'current_actor', CurrentActorMocked(dst_ver='8.10'))
+    monkeypatch.setattr(userspacegen.api, 'current_logger', logger_mocked())
+
+    userspacegen.prepare_target_userspace(context, '/tmp/userspace', ['cloudlinux8-baseos'], ['pkg'])
+
+    localinstall_cmds = [c for c in context.commands if 'localinstall' in c]
+    assert localinstall_cmds, 'expected a dnf localinstall of cloudlinux-release'
+    assert '--allowerasing' in localinstall_cmds[0]
