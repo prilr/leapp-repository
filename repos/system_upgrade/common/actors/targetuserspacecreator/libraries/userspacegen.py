@@ -266,7 +266,15 @@ def prepare_target_userspace(context, userspace_dir, enabled_repos, packages):
             'https://repo.cloudlinux.com/cloudlinux/migrate/release-files'
             '/cloudlinux/{version}/x86_64/cloudlinux{version}-release-current.x86_64.rpm'
         ).format(version=target_major_version)
-        context.call(['dnf', '-y', 'localinstall', cloudlinux_release_url],
+        # This localinstall runs against the (throwaway) source overlay, so the
+        # source rpmdb is in scope here. The target cloudlinux-release
+        # intentionally Conflicts with legacy packages that have no upgrade
+        # candidate on the source OS (e.g. rhn-client-tools < 2.11.5 on CL7,
+        # superseded by the CL8 build). Without --allowerasing dnf cannot
+        # resolve those conflicts and target_userspace_creator crashes (ZD
+        # 287724). Erasing here only touches the discarded overlay; the real
+        # upgrade transaction already resolves with allow_erasing=True.
+        context.call(['dnf', '-y', 'localinstall', '--allowerasing', cloudlinux_release_url],
                      callback_raw=utils.logging_handler)
 
         # cloudlinux 9 does not have modular packages
