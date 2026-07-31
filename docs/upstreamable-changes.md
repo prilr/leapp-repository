@@ -56,7 +56,6 @@ ours at the next rebase) · `declined` (upstream said no; we carry it knowingly)
 |---|---|---|---|
 | CLOS-4330 | Inhibit when NetworkManager is configured to manage no device | `el8toel9/actors/checkifcfg` (extend) | candidate |
 | CLOS-2565 | Force creation of shared mount points during overlay creation | `common/libraries/mounting.py`, `common/libraries/overlaygen.py` | candidate |
-| CLOS-2610 | Grub: `error: symbol 'grub_real_boot_time' not found` | unconfirmed | needs triage |
 
 ---
 
@@ -98,11 +97,44 @@ CloudLinux-specific premise. Carried over from filter 21880.
 `overlaygen.py` has changed upstream since, and the fix may have been
 superseded there.
 
+## Checked and not upstreamable
+
+Recorded so they are not re-triaged. An entry here means someone established
+there is nothing to offer, and why.
+
 ### CLOS-2610 — grub `grub_real_boot_time` symbol not found
 
-Carried over from filter 21880 as a **needs triage** entry, deliberately not
-given an upstream target. No commit in this repository references CLOS-2610, so
-it is unclear whether it was fixed here at all, fixed by one of the later grub
-changes under other tickets (CLOS-2842, CLOS-3157, CLOS-3716), or resolved for
-the customer without a code change. Establish that before treating it as an
-upstream candidate; if there is nothing to offer, delete this entry.
+**Nothing to offer: the fix is upstream's own, cherry-picked here.**
+
+The summary names the boot-time symptom, but the failure was earlier and
+different. `update_grub_core` ran `grub2-install /dev/sda` during `RPMUpgrade`
+and it refused:
+
+    grub2-install: warning: your core.img is unusually large. It won't fit in
+    the embedding area.
+    grub2-install: error: will not proceed with blocklists.
+
+The disk's first partition started below 1MiB, leaving too small an MBR gap for
+the EL8 `core.img`. `grub2-install` aborted, so the MBR kept the EL7 core while
+`/boot/grub2` got EL8 modules — and that mismatch is what produces
+`symbol 'grub_real_boot_time' not found` at the next boot.
+
+Upstream already inhibits on the precondition:
+`el7toel8/actors/checkfirstpartitionoffset`, authored by mhecko@redhat.com for
+[RHEL-3341](https://issues.redhat.com/browse/RHEL-3341) and cherry-picked into
+this fork as `982f3b7c` (from upstream `ea6cd791`) on 2024-06-13. The only
+subsequent CloudLinux commits touching those files are mechanical rebase
+adaptations (`fcacc53b` core-changes update, `a07d42a9` `reporting.Tags` ->
+`reporting.Groups`), so there is no CloudLinux delta to send either.
+
+Two things worth knowing from this one:
+
+- The ticket carries the `leapp_provide_to_upstream` label, which is how it
+  reached filter 21880. The label was applied at triage, before the fix path was
+  known — a label added on intake is a question, not a conclusion.
+- Grepping history for `CLOS-2610` finds nothing, because the commit that fixes
+  it references the *upstream* ticket. Absence of our key is not evidence that
+  nothing was done.
+
+**At rebase time:** once the fork's base includes upstream `ea6cd791`, drop the
+cherry-pick rather than resolving a conflict against it.
