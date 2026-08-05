@@ -28,6 +28,10 @@ ClMysqlTypeResult = collections.namedtuple(
 # Both files are present on CL7 and CL8+ when governor-mysql is installed.
 GOVERNOR_INSTALLED_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type.installed"
 
+# Matches the version directory Governor puts in the cl-mysql-meta repository URL, e.g.
+# ".../mysqlmeta/cl-mariadb-11.04/$basearch/" -> ("mariadb", "11", "04").
+CLMYSQL_REPO_URL_RE = re.compile(r"cl-(mariadb|mysql|percona)-(\d+)\.(\d+)", re.IGNORECASE)
+
 # This dict matches the MySQL type strings with DNF module and stream IDs.
 MODULE_STREAMS = {
     "mysql55": "mysql:cl-MySQL55",
@@ -45,8 +49,87 @@ MODULE_STREAMS = {
     "mariadb106": "mariadb:cl-MariaDB106",
     "mariadb1011": "mariadb:cl-MariaDB1011",
     "mariadb1104": "mariadb:cl-MariaDB1104",
+    # No mariadb1108 entry on purpose. Governor declares mariadb:cl-MariaDB1108, but the
+    # published cl-mariadb-11.08 repository carries no modules.yaml on cl8 or cl9 (unlike
+    # cl-mariadb-11.04), so that stream cannot be confirmed to exist. Leaving it out keeps
+    # the "module stream was derived automatically" warning, which is the signal we want
+    # until the 11.08 content question is settled.
     "percona56": "percona:cl-Percona56",
 }
+
+
+def parse_clmysql_type(clmysql_type):
+    """
+    Return ``(family, major, minor)`` for a Governor DB type token, or None.
+
+    Governor spells the token by concatenating the major and minor version, and the
+    spelling is not consistent across series: MariaDB 11.4 is ``mariadb1104`` (minor
+    padded to two digits) while 10.6 is ``mariadb106`` (not padded).  Governor also
+    re-derives the token from the RPM version when it caches it in mysql.type.installed
+    (``mysql_version()`` in install/utilities.py), which drops that padding again and
+    yields ``mariadb114`` for the very same installation.
+
+    Comparing the numeric triple instead of the spelling makes the two forms equal -
+    ``mariadb114`` and ``mariadb1104`` both parse to ``("mariadb", 11, 4)`` - so no
+    table of Governor's spellings has to be kept in sync here (CLOS-6809).
+
+    :param clmysql_type: type string such as ``mariadb114``, ``mariadb1104``, ``mysql80``
+    :returns: ``(family, major, minor)``, or None when the token is not recognised
+    """
+    match = re.match(r"^(mariadb|mysql|percona)(\d+)$", clmysql_type or "")
+    if not match:
+        return None
+
+    family, digits = match.group(1), match.group(2)
+    # Two-digit tokens are a one-digit major ("mysql57" -> 5.7); longer ones are a
+    # two-digit major ("mariadb106" -> 10.6, "mariadb1104" -> 11.04).
+    split = 1 if len(digits) <= 2 else 2
+    return family, int(digits[:split]), int(digits[split:])
+
+
+def parse_clmysql_repo_url(baseurl):
+    """
+    Return ``(family, major, minor)`` for a cl-mysql-meta baseurl, or None.
+
+    Parsing the version out of the URL and comparing it numerically avoids having to
+    predict how Governor spelled the directory: ``cl-mariadb-11.04`` and a hypothetical
+    ``cl-mariadb-11.4`` both parse to ``("mariadb", 11, 4)``.
+    """
+    match = CLMYSQL_REPO_URL_RE.search(baseurl or "")
+    if not match:
+        return None
+    return match.group(1).lower(), int(match.group(2)), int(match.group(3))
+
+
+def canonical_clmysql_type(clmysql_type):
+    """
+    Return the spelling of *clmysql_type* that MODULE_STREAMS knows, if there is one.
+
+    Only the DNF module lookup still needs Governor's exact spelling, because the stream
+    name is built from it (``mariadb1104`` -> ``cl-MariaDB1104``).  MODULE_STREAMS is the
+    registry of streams we have confirmed, so try the token as given and then with the
+    minor version padded back to two digits, and use whichever it lists.
+
+    Unknown tokens are returned unchanged; the caller then derives a stream name and
+    reports that it did so, which is the existing signal for a series nobody has
+    verified yet.
+    """
+    if not clmysql_type or clmysql_type in MODULE_STREAMS:
+        return clmysql_type
+
+    parsed = parse_clmysql_type(clmysql_type)
+    if not parsed:
+        return clmysql_type
+
+    family, major, minor = parsed
+    candidate = "{}{}{:02d}".format(family, major, minor)
+    if candidate in MODULE_STREAMS:
+        api.current_logger().debug(
+            "CL-MySQL type '{}' matches known module stream entry '{}'".format(clmysql_type, candidate)
+        )
+        return candidate
+
+    return clmysql_type
 
 
 def resolve_clmysql_module_stream(clmysql_type):
@@ -58,6 +141,8 @@ def resolve_clmysql_module_stream(clmysql_type):
     """
     if not clmysql_type:
         return None, None
+
+    clmysql_type = canonical_clmysql_type(clmysql_type)
 
     entry = MODULE_STREAMS.get(clmysql_type)
     if entry:
@@ -166,6 +251,9 @@ def get_clmysql_version_from_pkg():
     else:
         return None
 
+    # The same concatenation Governor uses, so this agrees with mysql.type.installed
+    # by construction. It is lossy ("11.4.12" -> "mariadb114"), which is why callers
+    # compare parse_clmysql_type() triples rather than these strings.
     return "%s%s" % (name, "".join(version.split(".")[:2]))
 
 
@@ -183,40 +271,6 @@ def get_pkg_prefix(clmysql_type):
         return None
 
 
-def get_expected_repo_url_fragment(clmysql_type):
-    """
-    Derive the expected cl-mysql-meta repo URL path fragment from the detected DB type.
-
-    Governor writes cl-mysql.repo with a baseurl like::
-
-        http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.6/$basearch/
-
-    The path component (``cl-mariadb-10.6``) is determined by the DB type.  This function
-    returns that expected fragment so callers can validate the repo URL.
-
-    :param clmysql_type: type string like ``mariadb106``, ``mysql57``, ``percona56``
-    :returns: expected path fragment like ``cl-mariadb-10.6``, or None if the type is
-              not recognised.
-    """
-    if not clmysql_type:
-        return None
-    # Match family + version digits: mariadb106 -> ("mariadb", "106")
-    m = re.match(r"^(mariadb|mysql|percona)(\d+)$", clmysql_type)
-    if not m:
-        return None
-    family, digits = m.group(1), m.group(2)
-    # Split digits into major.minor.  Governor concatenates major and minor:
-    #   "57" -> "5.7",  "80" -> "8.0"       (2-digit: single-digit major)
-    #   "106" -> "10.6", "100" -> "10.0"     (3-digit: two-digit major)
-    #   "1011" -> "10.11", "1104" -> "11.04" (4-digit: two-digit major)
-    # All known DB majors <= 2 digits; the split point is 1 for short, 2 otherwise.
-    if len(digits) <= 2:
-        major, minor = digits[:1], digits[1:]
-    else:
-        major, minor = digits[:2], digits[2:]
-    return "cl-{}-{}.{}".format(family, major, minor)
-
-
 def _get_clmysql_type_from_governor():
     """
     Read the actually installed DB type from the MySQL Governor cache file.
@@ -225,6 +279,13 @@ def _get_clmysql_type_from_governor():
     and the actually installed type in `mysql.type.installed` (written after a
     successful `--install`).  We read the installed file so that a pending
     `--mysql-version` that was never followed by `--install` does not mislead Leapp.
+
+    The cached value is not necessarily the token the administrator passed to
+    `--mysql-version`: Governor re-derives it from the mysqld owner RPM
+    (`mysql_version()` in install/utilities.py), which loses a leading zero in the
+    minor version, so a MariaDB 11.4 system caches `mariadb114` rather than
+    `mariadb1104`.  Both spellings are returned as-is; callers compare
+    parse_clmysql_type() triples, which treats them as the same version (CLOS-6809).
 
     Returns a type string like `mariadb106`, or None when Governor is absent,
     the file is missing/empty, or the value is `auto`.
@@ -254,12 +315,26 @@ def get_clmysql_type():
     When both sources are available, cross-check them. On mismatch, return a
     result with :attr:`ClMysqlTypeStatus.MISMATCH` so the caller can raise an inhibitor.
 
+    The two sources are compared as parsed versions rather than as strings: Governor may
+    have cached ``mariadb114`` for the same installation whose canonical token is
+    ``mariadb1104``, and treating that spelling difference as a mismatch inhibited the
+    upgrade on every MariaDB 11.x system (CLOS-6809).
+
     :returns: :class:`ClMysqlTypeResult` with status, resolved type, and raw detection values.
     """
     governor_type = _get_clmysql_type_from_governor()
     pkg_type = get_clmysql_version_from_pkg()
 
-    if governor_type and pkg_type and governor_type != pkg_type:
+    # Fall back to comparing the raw strings when either side is unparseable, so two
+    # different unrecognised values are still reported rather than both becoming None.
+    governor_version = parse_clmysql_type(governor_type)
+    pkg_version = parse_clmysql_type(pkg_type)
+    if governor_version and pkg_version:
+        differ = governor_version != pkg_version
+    else:
+        differ = governor_type != pkg_type
+
+    if governor_type and pkg_type and differ:
         api.current_logger().warning(
             "Governor mysql.type.installed says '{}' but RPM-based detection says '{}'."
             .format(governor_type, pkg_type)

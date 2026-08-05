@@ -8,10 +8,103 @@ from leapp.libraries.common.clmysql import (
     _get_clmysql_type_from_governor,
     _resolve_mysqld_path,
     get_clmysql_type,
-    get_expected_repo_url_fragment,
+    get_clmysql_version_from_pkg,
     get_pkg_prefix,
+    parse_clmysql_repo_url,
+    parse_clmysql_type,
     resolve_clmysql_module_stream,
 )
+
+
+# ---------------------------------------------------------------------------
+# normalize_clmysql_type
+# ---------------------------------------------------------------------------
+
+class TestParseClmysqlType(object):
+    """
+    CLOS-6809: Governor spells the same version two ways - it accepts and publishes
+    mariadb1104, but caches mariadb114 in mysql.type.installed after re-deriving the
+    token from the RPM version. Parsing to a numeric triple has to make them equal,
+    without a table of Governor's spellings to keep in sync.
+    """
+
+    @pytest.mark.parametrize(
+        "clmysql_type,expected",
+        [
+            ("mysql56", ("mysql", 5, 6)),
+            ("mysql80", ("mysql", 8, 0)),
+            ("mysql84", ("mysql", 8, 4)),
+            ("mariadb102", ("mariadb", 10, 2)),
+            ("mariadb106", ("mariadb", 10, 6)),
+            ("mariadb1011", ("mariadb", 10, 11)),
+            ("mariadb1104", ("mariadb", 11, 4)),
+            ("mariadb1108", ("mariadb", 11, 8)),
+            ("percona56", ("percona", 5, 6)),
+        ],
+    )
+    def test_canonical_tokens(self, clmysql_type, expected):
+        assert parse_clmysql_type(clmysql_type) == expected
+
+    @pytest.mark.parametrize(
+        "lossy,canonical",
+        [
+            ("mariadb114", "mariadb1104"),
+            ("mariadb118", "mariadb1108"),
+        ],
+    )
+    def test_both_spellings_are_the_same_version(self, lossy, canonical):
+        assert parse_clmysql_type(lossy) == parse_clmysql_type(canonical)
+
+    def test_future_series_needs_no_table_entry(self):
+        """The 11.x padding trap must not come back for a series nobody listed yet."""
+        assert parse_clmysql_type("mariadb124") == parse_clmysql_type("mariadb1204")
+        assert parse_clmysql_type("mariadb124") == ("mariadb", 12, 4)
+
+    @pytest.mark.parametrize(
+        "clmysql_type",
+        [None, "", "auto", "postgres15", "maria-db103"],
+    )
+    def test_unrecognised(self, clmysql_type):
+        assert parse_clmysql_type(clmysql_type) is None
+
+
+# ---------------------------------------------------------------------------
+# parse_clmysql_repo_url
+# ---------------------------------------------------------------------------
+
+class TestParseClmysqlRepoUrl(object):
+
+    @pytest.mark.parametrize(
+        "baseurl,expected",
+        [
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-11.04/$basearch/",
+             ("mariadb", 11, 4)),
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-11.08/$basearch/",
+             ("mariadb", 11, 8)),
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.6/$basearch/",
+             ("mariadb", 10, 6)),
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-10.11/$basearch/",
+             ("mariadb", 10, 11)),
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mysql-8.0/$basearch/",
+             ("mysql", 8, 0)),
+            ("http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-percona-5.6/$basearch/",
+             ("percona", 5, 6)),
+        ],
+    )
+    def test_known_urls(self, baseurl, expected):
+        assert parse_clmysql_repo_url(baseurl) == expected
+
+    def test_padding_is_irrelevant(self):
+        """11.04 and 11.4 in a URL describe the same version."""
+        base = "http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-{}/x86_64/"
+        assert parse_clmysql_repo_url(base.format("11.04")) == parse_clmysql_repo_url(base.format("11.4"))
+
+    @pytest.mark.parametrize(
+        "baseurl",
+        [None, "", "http://repo.cloudlinux.com/other/cl8/mysqlmeta/mysqlclient/x86_64/"],
+    )
+    def test_unrecognised(self, baseurl):
+        assert parse_clmysql_repo_url(baseurl) is None
 
 
 # ---------------------------------------------------------------------------
@@ -48,18 +141,13 @@ class TestResolveClmysqlModuleStream(object):
     def test_fallback_derivation(self, clmysql_type, expected):
         assert resolve_clmysql_module_stream(clmysql_type) == expected
 
-    @pytest.mark.parametrize(
-        "clmysql_type",
-        [
-            None,
-            "",
-            "postgres15",
-            "unknown",
-            "maria-db103",   # hyphen breaks the pattern
-        ],
-    )
-    def test_unresolvable(self, clmysql_type):
-        assert resolve_clmysql_module_stream(clmysql_type) == (None, None)
+    def test_rpm_derived_token_resolves_to_confirmed_stream(self):
+        """
+        CLOS-6809: cl-MariaDB1104 is the stream that exists in the target repo.
+        Deriving cl-MariaDB114 from the lossy token would enable a module that
+        the cl-mysql-meta repository does not carry.
+        """
+        assert resolve_clmysql_module_stream("mariadb114") == ("mariadb", "cl-MariaDB1104")
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +269,18 @@ class TestGetClmysqlTypeFromGovernor(object):
         )
         assert _get_clmysql_type_from_governor() is None
 
+    def test_lossy_governor_value_returned_verbatim(self, monkeypatch, tmpdir):
+        """
+        CLOS-6809: this is what Governor actually writes on a MariaDB 11.4 system.
+        It is reported as-is; callers compare parsed versions, not spellings.
+        """
+        f = tmpdir.join("mysql.type.installed")
+        f.write("mariadb114\n")
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql.GOVERNOR_INSTALLED_TYPE_FILE", str(f)
+        )
+        assert _get_clmysql_type_from_governor() == "mariadb114"
+
     def test_file_empty(self, monkeypatch, tmpdir):
         f = tmpdir.join("mysql.type.installed")
         f.write("")
@@ -199,37 +299,44 @@ class TestGetClmysqlTypeFromGovernor(object):
 
 
 # ---------------------------------------------------------------------------
-# get_expected_repo_url_fragment
+# get_clmysql_version_from_pkg
 # ---------------------------------------------------------------------------
 
-class TestGetExpectedRepoUrlFragment(object):
-    """Validate that the type-to-URL-fragment mapping matches Governor's REPO_NAMES."""
+class TestGetClmysqlVersionFromPkg(object):
+    """The token derived from the mysqld owner RPM, matching Governor's own derivation."""
+
+    def _patch_rpm(self, monkeypatch, name, version):
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._resolve_mysqld_path",
+            lambda: "/usr/sbin/mysqld",
+        )
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._clmysql_name_version_from_rpm",
+            lambda _path: (name, version),
+        )
 
     @pytest.mark.parametrize(
-        "clmysql_type,expected",
+        "name,version,expected",
         [
-            ("mysql51", "cl-mysql-5.1"),
-            ("mysql55", "cl-mysql-5.5"),
-            ("mysql57", "cl-mysql-5.7"),
-            ("mysql80", "cl-mysql-8.0"),
-            ("mysql84", "cl-mysql-8.4"),
-            ("mariadb55", "cl-mariadb-5.5"),
-            ("mariadb100", "cl-mariadb-10.0"),
-            ("mariadb106", "cl-mariadb-10.6"),
-            ("mariadb1011", "cl-mariadb-10.11"),
-            ("mariadb1104", "cl-mariadb-11.04"),
-            ("percona56", "cl-percona-5.6"),
+            # CLOS-6809: the reporter's exact package version. Governor derives the
+            # same lossy spelling, so the two sources agree by construction.
+            ("cl-mariadb1104-server", "11.4.12", "mariadb114"),
+            ("cl-mariadb1108-server", "11.8.3", "mariadb118"),
+            ("cl-mariadb1011-server", "10.11.6", "mariadb1011"),
+            ("cl-mariadb106-server", "10.6.16", "mariadb106"),
+            ("cl-mysql80-server", "8.0.35", "mysql80"),
+            ("cl-percona56-server", "5.6.51", "percona56"),
         ],
     )
-    def test_known_types(self, clmysql_type, expected):
-        assert get_expected_repo_url_fragment(clmysql_type) == expected
+    def test_canonical_token(self, monkeypatch, name, version, expected):
+        self._patch_rpm(monkeypatch, name, version)
+        assert get_clmysql_version_from_pkg() == expected
 
-    @pytest.mark.parametrize(
-        "clmysql_type",
-        [None, "", "unknown", "postgres15"],
-    )
-    def test_unrecognised(self, clmysql_type):
-        assert get_expected_repo_url_fragment(clmysql_type) is None
+    def test_no_mysqld(self, monkeypatch):
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._resolve_mysqld_path", lambda: None
+        )
+        assert get_clmysql_version_from_pkg() is None
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +405,60 @@ class TestGetClmysqlType(object):
         assert result.status == ClMysqlTypeStatus.MISMATCH
         assert result.governor_type == "mariadb1011"
         assert result.pkg_type == "mariadb106"
+
+    def test_mariadb114_untouched_governor_file_is_not_a_mismatch(self, monkeypatch, tmpdir):
+        """
+        CLOS-6809 inhibitor #2: on an untouched MariaDB 11.4 system Governor writes
+        'mariadb114' and the mysqld owner RPM is 11.4.12.  Both sides describe the
+        same installation, so no mismatch may be reported.
+        """
+        f = tmpdir.join("mysql.type.installed")
+        f.write("mariadb114")
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql.GOVERNOR_INSTALLED_TYPE_FILE", str(f)
+        )
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._resolve_mysqld_path",
+            lambda: "/usr/sbin/mysqld",
+        )
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._clmysql_name_version_from_rpm",
+            lambda _path: ("cl-mariadb1104-server", "11.4.12"),
+        )
+        result = get_clmysql_type()
+        assert result.status == ClMysqlTypeStatus.OK
+        assert result.governor_type == "mariadb114"
+        assert result.pkg_type == "mariadb114"
+
+    def test_hand_corrected_governor_file_is_not_a_mismatch(self, monkeypatch, tmpdir):
+        """
+        CLOS-6809: KCS 27757797511068 tells customers to write the canonical token
+        into mysql.type.installed by hand.  That must not turn into a mismatch
+        against the RPM-derived token either.
+        """
+        f = tmpdir.join("mysql.type.installed")
+        f.write("mariadb1104")
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql.GOVERNOR_INSTALLED_TYPE_FILE", str(f)
+        )
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._resolve_mysqld_path",
+            lambda: "/usr/sbin/mysqld",
+        )
+        monkeypatch.setattr(
+            "leapp.libraries.common.clmysql._clmysql_name_version_from_rpm",
+            lambda _path: ("cl-mariadb1104-server", "11.4.12"),
+        )
+        result = get_clmysql_type()
+        assert result.status == ClMysqlTypeStatus.OK
+        assert result.governor_type == "mariadb1104"
+        assert result.pkg_type == "mariadb114"
+
+    def test_real_mismatch_still_detected(self, monkeypatch):
+        """Normalization must not paper over a genuine version disagreement."""
+        self._patch_sources(monkeypatch, "mariadb1104", "mariadb1011")
+        result = get_clmysql_type()
+        assert result.status == ClMysqlTypeStatus.MISMATCH
 
     def test_governor_only(self, monkeypatch):
         """Governor file present but mysqld not found (no RPM detection)."""
