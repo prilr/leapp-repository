@@ -9,7 +9,8 @@ from leapp.libraries.common.clmysql import (
     ClMysqlTypeStatus,
     construct_repomap_data,
     get_clmysql_type,
-    get_expected_repo_url_fragment,
+    parse_clmysql_repo_url,
+    parse_clmysql_type,
 )
 from leapp.libraries.common.config.version import get_target_major_version
 from leapp.libraries.stdlib import api
@@ -82,64 +83,77 @@ def clmysql_process(lib, repofile_name, repofile_data):
 
     api.current_logger().debug("repoids from CloudLinux repofile {}: {}".format(repofile_name, data_to_log))
 
-    # Validate that cl-mysql-meta repo's baseurl matches the detected DB type.
-    # Governor configures the URL based on the selected DB version (e.g. cl-mariadb-10.6 for mariadb106).
-    # If the user switched DB versions without re-running Governor --install,
-    # the repo may point to the wrong package set.
+    # Validate that the cl-mysql-meta repo's baseurl matches the detected DB type.
+    # Governor picks the URL from the selected DB version (e.g. cl-mariadb-10.6 for
+    # mariadb106). If the user switched DB versions without re-running Governor
+    # --install, the repo may point at the wrong package set.
+    #
+    # Compare the parsed versions rather than a predicted directory name. Governor's
+    # spelling is not derivable - 11.4 is published as cl-mariadb-11.04 but 10.6 as
+    # cl-mariadb-10.6 - and predicting it produced a phantom cl-mariadb-11.4, which
+    # inhibited every MariaDB 11.x upgrade and printed a 404 URL as the remedy
+    # (CLOS-6809).
+    #
     # We inhibit rather than auto-correct because Governor is the authoritative source
     # for this repo file and has the real download-and-write logic;
     # re-running --install is the proper fix.
-    expected_fragment = get_expected_repo_url_fragment(lib.clmysql_type)
-    if expected_fragment:
+    detected_version = parse_clmysql_type(lib.clmysql_type)
+    if detected_version:
         for repo_data in repofile_data.data:
-            if repo_data.repoid == "cl-mysql-meta" and "/{}/".format(expected_fragment) not in repo_data.baseurl:
-                api.current_logger().warning(
-                    "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "
-                    "(expected '{}' in URL)."
-                    .format(repo_data.baseurl, lib.clmysql_type, expected_fragment)
+            if repo_data.repoid != "cl-mysql-meta":
+                continue
+            repo_version = parse_clmysql_repo_url(repo_data.baseurl)
+            if repo_version is None or repo_version == detected_version:
+                continue
+            api.current_logger().warning(
+                "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "
+                "(repo describes {}.{}, installed is {}.{})."
+                .format(
+                    repo_data.baseurl, lib.clmysql_type,
+                    repo_version[1], repo_version[2],
+                    detected_version[1], detected_version[2],
                 )
-                reporting.create_report(
-                    [
-                        reporting.Title(
-                            "cl-mysql.repo does not match the installed database type"
-                        ),
-                        reporting.Summary(
-                            "The cl-mysql-meta repository is configured for a different "
-                            "database type than what is actually installed. "
-                            "The detected database type is '{}', but the cl-mysql-meta "
-                            "repo URL points to '{}'. "
-                            "This may happen when the database version was changed "
-                            "without a follow-up '/usr/share/lve/dbgovernor/mysqlgovernor.py --install', or the "
-                            "cl-mysql.repo file was manually edited. "
-                            "Proceeding with the wrong repository would result in "
-                            "an incorrect upgrade operation."
-                            .format(lib.clmysql_type, repo_data.baseurl)
-                        ),
-                        reporting.Severity(reporting.Severity.HIGH),
-                        reporting.Groups(
-                            [
-                                reporting.Groups.REPOSITORY,
-                                reporting.Groups.OS_FACTS
-                            ]
-                        ),
-                        reporting.Groups([reporting.Groups.INHIBITOR]),
-                        reporting.Remediation(
-                            hint=(
-                                "Download the correct repository file for the installed "
-                                "database type: "
-                                "curl -o /etc/yum.repos.d/cl-mysql.repo "
-                                "http://repo.cloudlinux.com/other/"
-                                "cl${{releasever}}/mysqlmeta/{expected}-common.repo\n"
-                                "Or re-run MySQL Governor to regenerate it "
-                                "(this reinstalls the full DB stack): "
-                                "/usr/share/lve/dbgovernor/mysqlgovernor.py --install --yes\n"
-                                "Then restart the upgrade process."
-                                .format(expected=expected_fragment)
-                            )
-                        ),
-                    ]
-                )
-                return
+            )
+            reporting.create_report(
+                [
+                    reporting.Title(
+                        "cl-mysql.repo does not match the installed database type"
+                    ),
+                    reporting.Summary(
+                        "The cl-mysql-meta repository is configured for a different "
+                        "database version than what is actually installed. "
+                        "The installed database is {0} {1}.{2}, but the cl-mysql-meta "
+                        "repo URL points to {3} {4}.{5}: '{6}'. "
+                        "This may happen when the database version was changed "
+                        "without a follow-up '/usr/share/lve/dbgovernor/mysqlgovernor.py --install', or the "
+                        "cl-mysql.repo file was manually edited. "
+                        "Proceeding with the wrong repository would result in "
+                        "an incorrect upgrade operation."
+                        .format(
+                            detected_version[0], detected_version[1], detected_version[2],
+                            repo_version[0], repo_version[1], repo_version[2],
+                            repo_data.baseurl,
+                        )
+                    ),
+                    reporting.Severity(reporting.Severity.HIGH),
+                    reporting.Groups(
+                        [
+                            reporting.Groups.REPOSITORY,
+                            reporting.Groups.OS_FACTS
+                        ]
+                    ),
+                    reporting.Groups([reporting.Groups.INHIBITOR]),
+                    reporting.Remediation(
+                        hint=(
+                            "Re-run MySQL Governor to regenerate the repository file for the "
+                            "installed database (this reinstalls the full DB stack): "
+                            "/usr/share/lve/dbgovernor/mysqlgovernor.py --install --yes\n"
+                            "Then restart the upgrade process."
+                        )
+                    ),
+                ]
+            )
+            return
 
     cl_target_repofile_list = []
     target_major = get_target_major_version()
