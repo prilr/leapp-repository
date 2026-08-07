@@ -237,6 +237,28 @@ def _parse_preset_files(preset_files, load_path, ignore_invalid_entries):
     return presets
 
 
+def get_system_unit_presets(suffix, ignore_invalid_entries=True):
+    """
+    Get vendor preset states for units of a single unit type
+
+    Unlike :func:`get_system_service_preset_files` this is not restricted to
+    '.service' units and returns a plain mapping instead of models, so it can
+    also be used for unit types that have no dedicated model (e.g. timers).
+
+    :param suffix: Unit file suffix to filter on, including the dot, e.g. '.timer'
+    :param ignore_invalid_entries: Ignore invalid entries in preset files if True, raise ValueError otherwise
+    :return: Dictionary mapping unit names to their preset state ('enable' or 'disable')
+    :rtype: dict[str, str]
+    :raises: CalledProcessError: In case of errors when discovering systemd preset files
+    :raises: OSError: When the `find` command is not available
+    :raises: ValueError: When a preset file has invalid content and ignore_invalid_entries is False
+    """
+    preset_files = _get_system_preset_files()
+    presets = _parse_preset_files(preset_files, SYSTEMD_SYSTEM_LOAD_PATH, ignore_invalid_entries)
+
+    return dict((unit, state) for unit, state in presets.items() if unit.endswith(suffix))
+
+
 def get_system_service_preset_files(service_files, ignore_invalid_entries=False):
     """
     Get system preset files for services

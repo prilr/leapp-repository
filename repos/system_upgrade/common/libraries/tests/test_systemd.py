@@ -261,3 +261,35 @@ def test_get_service_preset_files_invalid(monkeypatch):
     with pytest.raises(ValueError):
         # doesn't matter what service_files are
         systemd.get_system_service_preset_files([], ignore_invalid_entries=False)
+
+
+@pytest.mark.parametrize(
+    'suffix,expected',
+    [
+        ('.socket', {'example.socket': 'disable'}),
+        ('.timer', {}),
+        (
+            '.service',
+            {
+                'example.service': 'enable',
+                'abc.service': 'disable',
+                'template@.service': 'disable',
+                'template@instance1.service': 'enable',
+                'template@instance2.service': 'enable',
+                'globbed-one.service': 'enable',
+                'globbed-two.service': 'enable',
+                'extra.service': 'disable',
+                'template2@.service': 'disable',
+            },
+        ),
+    ]
+)
+def test_get_system_unit_presets(monkeypatch, suffix, expected):
+
+    def get_system_preset_files_mocked():
+        return TESTING_PRESET_FILES
+
+    monkeypatch.setattr(systemd, '_get_system_preset_files', get_system_preset_files_mocked)
+    monkeypatch.setattr(systemd, '_parse_preset_files', parse_preset_files_mocked())
+
+    assert systemd.get_system_unit_presets(suffix) == expected
