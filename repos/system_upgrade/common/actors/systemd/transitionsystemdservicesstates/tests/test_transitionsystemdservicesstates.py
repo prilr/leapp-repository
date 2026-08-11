@@ -114,6 +114,23 @@ def test_filter_irrelevant_services_keeps_new_target_units():
     assert [s.name for s in filtered] == ["new-enabled.service", "new-disabled.timer"]
 
 
+def test_filter_irrelevant_services_drops_ignored_units():
+    # Ignored units are removed from the source inventory, which must not make
+    # them look new on the target - otherwise the target preset gets applied to
+    # a unit that was deliberately excluded from handling.
+    services_source = {}
+    services_target = [
+        SystemdServiceFile(name="virtqemud.service", state="disabled"),
+        SystemdServiceFile(name="new-disabled.timer", state="disabled"),
+    ]
+
+    filtered = transitionsystemdservicesstates._filter_irrelevant_services(
+        services_source, services_target, ignored_services={"virtqemud.service"}
+    )
+
+    assert [s.name for s in filtered] == ["new-disabled.timer"]
+
+
 def test_filter_irrelevant_services_services_not_filtered():
     services_source = {
         "test1.service": "enabled",
@@ -330,10 +347,78 @@ def test_filter_ignored_services(monkeypatch, source_major_ver, expected):
         'virtlogd.service': 'disabled',
         'virtproxyd.service': 'masked',
     }
+    services_before = dict(services)
     monkeypatch.setattr(
         version,
         "get_source_major_version",
         lambda: source_major_ver,
     )
-    transitionsystemdservicesstates._filter_ignored_services(services)
+    ignored = transitionsystemdservicesstates._filter_ignored_services(services)
     assert services == expected
+
+    # The ignored names must be reported back, so target filtering can exclude
+    # them too instead of mistaking them for units new on the target. The set
+    # covers the whole libvirt group, not only the entries that happened to be
+    # present in the source inventory.
+    if int(source_major_ver) < 8:
+        assert ignored == set()
+    else:
+        assert {
+            'libvirtd.service',
+            'virtqemud.service',
+            'virtlogd.service',
+            'virtproxyd.service',
+            'libvirt-guests.service',
+        }.issubset(ignored)
+        # everything dropped from the inventory is accounted for
+        assert not set(services_before) - set(services) - ignored
+
+
+def test_ignored_libvirt_service_is_not_enabled_by_target_preset(monkeypatch):
+    """
+    Regression test for the CL8+ libvirt exclusion.
+
+    virtqemud.service is excluded from handling on 8->9+ by removing it from the
+    source inventory. It is present but disabled on the target, and the CL9
+    vendor preset enables it, so it must still be left alone - enabling it would
+    reinstate the invalid monolithic/modular libvirt combination the exclusion
+    exists to prevent.
+    """
+    service_info_source = SystemdServicesInfoSource(service_files=[
+        SystemdServiceFile(name="virtqemud.service", state="disabled"),
+        SystemdServiceFile(name="test.service", state="enabled"),
+    ])
+    preset_info_source = SystemdServicesPresetInfoSource(presets=[
+        SystemdServicePreset(service="virtqemud.service", state="disable"),
+        SystemdServicePreset(service="test.service", state="enable"),
+    ])
+    service_info_target = SystemdServicesInfoTarget(service_files=[
+        SystemdServiceFile(name="virtqemud.service", state="disabled"),
+        SystemdServiceFile(name="test.service", state="enabled"),
+    ])
+    preset_info_target = SystemdServicesPresetInfoTarget(presets=[
+        SystemdServicePreset(service="virtqemud.service", state="enable"),
+        SystemdServicePreset(service="test.service", state="enable"),
+    ])
+
+    monkeypatch.setattr(version, "get_source_major_version", lambda: '8')
+    monkeypatch.setattr(
+        api,
+        "current_actor",
+        CurrentActorMocked(
+            msgs=[
+                service_info_source,
+                service_info_target,
+                preset_info_source,
+                preset_info_target,
+            ]
+        ),
+    )
+    monkeypatch.setattr(api, "produce", produce_mocked())
+    monkeypatch.setattr(reporting, "create_report", create_report_mocked())
+
+    transitionsystemdservicesstates.process()
+
+    assert api.produce.called
+    assert api.produce.model_instances[0].to_enable == []
+    assert api.produce.model_instances[0].to_disable == []
