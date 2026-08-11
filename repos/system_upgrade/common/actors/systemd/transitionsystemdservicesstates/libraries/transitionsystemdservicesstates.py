@@ -93,6 +93,9 @@ def _get_service_preset(service_name, presets):
 def _filter_ignored_services(services_source):
     """
     Filter out services that should be ignored i.e. not handled
+
+    :return: Names of the services that must not be handled
+    :rtype: set[str]
     """
     to_ignore = []
     if int(version.get_source_major_version()) >= 8:
@@ -112,26 +115,37 @@ def _filter_ignored_services(services_source):
         ])
 
     for s in to_ignore:
-        # It's sufficient to remove just from the source system services,
-        # because if a service is not present on the source system it's not handled either way
+        # Removing these from the source inventory is not enough on its own: an
+        # entry missing from it is otherwise taken to mean "new on the target",
+        # which applies the target preset. The names are returned so target
+        # filtering can drop them as well.
         if services_source.pop(s, None):
             api.current_logger().debug("Ignored service {} found on the source system".format(s))
 
+    return set(to_ignore)
 
-def _filter_irrelevant_services(services_source, services_target):
+
+def _filter_irrelevant_services(services_source, services_target, ignored_services=frozenset()):
     """
     Filter out irrelevant services
 
-    Irrelevant services are those that cannot be enabled/disabled and those in
-    masked-runtime state. Services that do not exist on the source system are
-    kept: they are new on the target and the desired-state logic decides whether
-    to enable them based on the target preset.
+    Irrelevant services are those that cannot be enabled/disabled, those in
+    masked-runtime state, and those explicitly ignored. Services that do not
+    exist on the source system are kept: they are new on the target and the
+    desired-state logic decides whether to enable them based on the target
+    preset.
 
+    :param ignored_services: Names of services that must not be handled at all
     :return: Target system services without the irrelevant ones.
     :rtype: list
     """
     filtered = []
     for service in services_target:
+        if service.name in ignored_services:
+            # Excluded from handling; it is not a unit new on the target, even
+            # though it is absent from the source inventory.
+            continue
+
         if service.state not in ("enabled", "disabled", "enabled-runtime"):
             # Enabling/disabling of services is only relevant to these states
             continue
@@ -242,8 +256,10 @@ def process():
     presets_source = {p.service: p.state for p in presets_source}
     presets_target = {p.service: p.state for p in presets_target}
 
-    _filter_ignored_services(services_source)
-    services_target = _filter_irrelevant_services(services_source, services_target)
+    ignored_services = _filter_ignored_services(services_source)
+    services_target = _filter_irrelevant_services(
+        services_source, services_target, ignored_services
+    )
 
     desired_states = _get_desired_states(
         services_source, presets_source, services_target, presets_target
