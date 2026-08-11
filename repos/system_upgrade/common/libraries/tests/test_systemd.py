@@ -132,12 +132,18 @@ _PARSE_PRESET_ENTRIES_TEST_DEFINITION = (
         'template@instance1.service': 'disable',
         'template@instance2.service': 'disable'
     }),
+    # Instances must keep the template's own unit type, not become '.service'
+    ('enable template@.timer daily weekly', {
+        'template@daily.timer': 'enable',
+        'template@weekly.timer': 'enable'
+    }),
     ('enable globbed*.service', {'globbed-one.service': 'enable', 'globbed-two.service': 'enable'}),
     ('enable example.*', {'example.service': 'enable', 'example.socket': 'enable'}),
     ('disable *', {
             'example.service': 'disable',
             'abc.service': 'disable',
             'template@.service': 'disable',
+            'template@.timer': 'disable',
             'template2@.service': 'disable',
             'globbed-one.service': 'disable',
             'globbed-two.service': 'disable',
@@ -175,6 +181,7 @@ def test_parse_preset_files(monkeypatch):
         'example.socket': 'disable',
         'abc.service': 'disable',
         'template@.service': 'disable',
+        'template@.timer': 'disable',
         'template@instance1.service': 'enable',
         'template@instance2.service': 'enable',
         'globbed-one.service': 'enable',
@@ -267,7 +274,7 @@ def test_get_service_preset_files_invalid(monkeypatch):
     'suffix,expected',
     [
         ('.socket', {'example.socket': 'disable'}),
-        ('.timer', {}),
+        ('.timer', {'template@.timer': 'disable'}),
         (
             '.service',
             {

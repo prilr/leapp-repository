@@ -200,10 +200,13 @@ def _parse_preset_entry(entry, presets, load_path):
                 # if the entry contains instance names after template unit name
                 # the entry only applies to the specified instances, not to the
                 # template itself
+                # The instance keeps the unit type of the template it comes from,
+                # which is not necessarily '.service' (e.g. 'backup@.timer').
+                unit_type = os.path.splitext(unit_file)[1]
                 for instance in columns[2:]:
-                    service_name = unit_file[:unit_file.index('@') + 1] + instance + '.service'
-                    if service_name not in presets:  # first occurrence has priority
-                        presets[service_name] = columns[0]
+                    unit_name = unit_file[:unit_file.index('@') + 1] + instance + unit_type
+                    if unit_name not in presets:  # first occurrence has priority
+                        presets[unit_name] = columns[0]
 
             elif unit_file not in presets:  # first occurrence has priority
                 presets[unit_file] = columns[0]
