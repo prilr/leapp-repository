@@ -1,3 +1,7 @@
+* Tue Aug 11 2026 Roman Prilipskii <rprilipskii@cloudlinux.com> 0.20.0-11.cloudlinux
+- CLOS-6809: Fix the upgrade being blocked on servers running MySQL Governor with MariaDB 11.4 or 11.8, where the installed database version was reported in a form that the cl-mysql repository check did not recognise
+- Determine the database module to enable from the configured cl-mysql repository, so that newly released CloudLinux MySQL and MariaDB versions are upgraded correctly without waiting for a Leapp update
+
 * Thu Aug 06 2026 Roman Prilipskii <rprilipskii@cloudlinux.com> 0.20.0-10.cloudlinux
 - CLOS-2132: Warn before the upgrade when the PostgreSQL configuration would keep the database from starting on the new system, and spell out the migration steps to run afterwards
 - CLOS-3716: Stop the upgrade when the target repositories offer a kernel newer than the rest of the target system, which could leave LVE unusable after the reboot
