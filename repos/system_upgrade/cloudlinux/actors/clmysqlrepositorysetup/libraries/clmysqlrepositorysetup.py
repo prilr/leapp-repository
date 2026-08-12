@@ -67,6 +67,8 @@ class MySqlRepositorySetupLibrary(object):
     def __init__(self):
         self.mysql_types = set()
         self.clmysql_type = None
+        # baseurl of the cl-mysql-meta repo, once confirmed to match the installed DB.
+        self.clmysql_meta_baseurl = None
         # Messages to send about custom generated package repositories.
         self.custom_repo_msgs = []
         self.mapping_msgs = []
@@ -116,7 +118,9 @@ class MySqlRepositorySetupLibrary(object):
                 )
 
         if "cloudlinux" in self.mysql_types and self.clmysql_type:
-            mod_name, mod_stream = resolve_clmysql_module_stream(self.clmysql_type)
+            mod_name, mod_stream = resolve_clmysql_module_stream(
+                self.clmysql_type, baseurl=self.clmysql_meta_baseurl
+            )
             if mod_name and mod_stream:
                 if self.clmysql_type not in MODULE_STREAMS:
                     api.current_logger().warning(
@@ -129,9 +133,10 @@ class MySqlRepositorySetupLibrary(object):
                             reporting.Title("CloudLinux database module stream was derived automatically"),
                             reporting.Summary(
                                 "The active CloudLinux MySQL/MariaDB/Percona type ({0}) has no explicit Leapp "
-                                "MODULE_STREAMS entry. Leapp will enable DNF module {1}:{2} derived from the "
-                                "detected type string. If the upgrade fails, confirm this module exists for the "
-                                "target OS and add MODULE_STREAMS in Leapp if the product stream name differs."
+                                "MODULE_STREAMS entry. Leapp will enable DNF module {1}:{2}, derived from the "
+                                "configured cl-mysql repository. If the upgrade fails, confirm this module exists "
+                                "for the target OS and add MODULE_STREAMS in Leapp if the product stream name "
+                                "differs."
                                 .format(self.clmysql_type, mod_name, mod_stream)
                             ),
                             reporting.Severity(reporting.Severity.MEDIUM),

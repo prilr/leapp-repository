@@ -103,7 +103,12 @@ def clmysql_process(lib, repofile_name, repofile_data):
             if repo_data.repoid != "cl-mysql-meta":
                 continue
             repo_version = parse_clmysql_repo_url(repo_data.baseurl)
-            if repo_version is None or repo_version == detected_version:
+            if repo_version == detected_version:
+                # Confirmed to describe the installed DB, so it is a trustworthy source
+                # for the DNF module stream, which the type token cannot spell reliably.
+                lib.clmysql_meta_baseurl = repo_data.baseurl
+                continue
+            if repo_version is None:
                 continue
             api.current_logger().warning(
                 "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "

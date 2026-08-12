@@ -9,6 +9,7 @@ from leapp.libraries.common.clmysql import (
     _resolve_mysqld_path,
     get_clmysql_type,
     get_clmysql_version_from_pkg,
+    clmysql_module_stream_from_url,
     get_pkg_prefix,
     parse_clmysql_repo_url,
     parse_clmysql_type,
@@ -141,6 +142,29 @@ class TestResolveClmysqlModuleStream(object):
     def test_fallback_derivation(self, clmysql_type, expected):
         assert resolve_clmysql_module_stream(clmysql_type) == expected
 
+    def test_repo_url_supplies_the_stream_for_an_unlisted_series(self):
+        """
+        A series with no MODULE_STREAMS entry takes its stream from the repository
+        rather than from the token, which cannot spell a padded minor version.
+        """
+        url = "http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-12.04/$basearch/"
+        assert resolve_clmysql_module_stream("mariadb124", baseurl=url) == ("mariadb", "cl-MariaDB1204")
+        # Without the repository we can only fall back to the token, unpadded.
+        assert resolve_clmysql_module_stream("mariadb124") == ("mariadb", "cl-MariaDB124")
+
+    def test_confirmed_entry_wins_over_the_repo_url(self):
+        """MODULE_STREAMS lists streams we verified, so it takes precedence."""
+        url = "http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-99.99/$basearch/"
+        assert resolve_clmysql_module_stream("mariadb1104", baseurl=url) == ("mariadb", "cl-MariaDB1104")
+
+    def test_mariadb_11_8_gets_its_real_stream_name_from_the_repo(self):
+        """
+        11.08 is deliberately absent from MODULE_STREAMS (its module is unconfirmed),
+        but the repository still spells the name correctly: cl-MariaDB1108, not 118.
+        """
+        url = "http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-11.08/$basearch/"
+        assert resolve_clmysql_module_stream("mariadb118", baseurl=url) == ("mariadb", "cl-MariaDB1108")
+
     def test_rpm_derived_token_resolves_to_confirmed_stream(self):
         """
         CLOS-6809: cl-MariaDB1104 is the stream that exists in the target repo.
@@ -148,6 +172,63 @@ class TestResolveClmysqlModuleStream(object):
         the cl-mysql-meta repository does not carry.
         """
         assert resolve_clmysql_module_stream("mariadb114") == ("mariadb", "cl-MariaDB1104")
+
+
+# ---------------------------------------------------------------------------
+# clmysql_module_stream_from_url
+# ---------------------------------------------------------------------------
+
+class TestClmysqlModuleStreamFromUrl(object):
+    """
+    The repository directory keeps the digits the module stream uses, padding and
+    all, so the stream can be read off it instead of guessed from the type token.
+    Checked against every (repo dir, stream) pair in governor-mysql 1.2-147.
+    """
+
+    @pytest.mark.parametrize(
+        "repo_dir,expected",
+        [
+            ("mysql-5.5", ("mysql", "cl-MySQL55")),
+            ("mysql-5.6", ("mysql", "cl-MySQL56")),
+            ("mysql-5.7", ("mysql", "cl-MySQL57")),
+            ("mysql-8.0", ("mysql", "cl-MySQL80")),
+            ("mysql-8.4", ("mysql", "cl-MySQL84")),
+            ("mariadb-5.5", ("mariadb", "cl-MariaDB55")),
+            ("mariadb-10.0", ("mariadb", "cl-MariaDB100")),
+            ("mariadb-10.1", ("mariadb", "cl-MariaDB101")),
+            ("mariadb-10.2", ("mariadb", "cl-MariaDB102")),
+            ("mariadb-10.3", ("mariadb", "cl-MariaDB103")),
+            ("mariadb-10.4", ("mariadb", "cl-MariaDB104")),
+            ("mariadb-10.5", ("mariadb", "cl-MariaDB105")),
+            ("mariadb-10.6", ("mariadb", "cl-MariaDB106")),
+            ("mariadb-10.11", ("mariadb", "cl-MariaDB1011")),
+            ("mariadb-11.04", ("mariadb", "cl-MariaDB1104")),
+            ("mariadb-11.08", ("mariadb", "cl-MariaDB1108")),
+            ("percona-5.6", ("percona", "cl-Percona56")),
+        ],
+    )
+    def test_matches_governor_tables(self, repo_dir, expected):
+        url = "http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-{}/$basearch/".format(repo_dir)
+        assert clmysql_module_stream_from_url(url) == expected
+
+    @pytest.mark.parametrize(
+        "repo_dir,expected",
+        [
+            ("mariadb-12.04", ("mariadb", "cl-MariaDB1204")),
+            ("mariadb-12.10", ("mariadb", "cl-MariaDB1210")),
+        ],
+    )
+    def test_future_series_needs_no_table_entry(self, repo_dir, expected):
+        """A padded minor is exactly what the token-based guess got wrong."""
+        url = "http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-{}/$basearch/".format(repo_dir)
+        assert clmysql_module_stream_from_url(url) == expected
+
+    @pytest.mark.parametrize(
+        "baseurl",
+        [None, "", "http://repo.cloudlinux.com/other/cl8/mysqlmeta/mysqlclient/x86_64/"],
+    )
+    def test_unrecognised(self, baseurl):
+        assert clmysql_module_stream_from_url(baseurl) == (None, None)
 
 
 # ---------------------------------------------------------------------------
