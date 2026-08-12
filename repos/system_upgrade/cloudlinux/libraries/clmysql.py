@@ -32,6 +32,9 @@ GOVERNOR_INSTALLED_TYPE_FILE = "/usr/share/lve/dbgovernor/mysql.type.installed"
 # ".../mysqlmeta/cl-mariadb-11.04/$basearch/" -> ("mariadb", "11", "04").
 CLMYSQL_REPO_URL_RE = re.compile(r"cl-(mariadb|mysql|percona)-(\d+)\.(\d+)", re.IGNORECASE)
 
+# Capitalisation Governor uses for the DNF module stream of each family.
+CLMYSQL_FAMILY_CAMEL = {"mariadb": "MariaDB", "mysql": "MySQL", "percona": "Percona"}
+
 # This dict matches the MySQL type strings with DNF module and stream IDs.
 MODULE_STREAMS = {
     "mysql55": "mysql:cl-MySQL55",
@@ -132,12 +135,43 @@ def canonical_clmysql_type(clmysql_type):
     return clmysql_type
 
 
-def resolve_clmysql_module_stream(clmysql_type):
+def clmysql_module_stream_from_url(baseurl):
+    """
+    Derive (dnf_module_name, stream) from the cl-mysql-meta repository directory.
+
+    The directory carries the same digits as the module stream, padding included -
+    cl-mariadb-11.04 goes with cl-MariaDB1104, cl-mariadb-10.6 with cl-MariaDB106 -
+    so the stream can be read off the repository the system is actually configured for
+    instead of being guessed from the cached type token, which has lost that padding.
+    That guess produced cl-MariaDB114 for MariaDB 11.4, and would produce
+    cl-MariaDB124 for a future 12.4, neither of which exists.
+
+    Only meaningful once the repository has been confirmed to describe the installed
+    database: clmysql_process() inhibits the upgrade before reaching this point when
+    the two disagree.
+
+    :returns: ``(module_name, stream)`` or ``(None, None)`` if the URL is not recognised
+    """
+    match = CLMYSQL_REPO_URL_RE.search(baseurl or "")
+    if not match:
+        return None, None
+    family = match.group(1).lower()
+    # group(2)/group(3) are the raw digits, so "11.04" stays "1104" and not "114".
+    return family, "cl-{}{}{}".format(CLMYSQL_FAMILY_CAMEL[family], match.group(2), match.group(3))
+
+
+def resolve_clmysql_module_stream(clmysql_type, baseurl=None):
     """
     Return (dnf_module_name, stream) for CloudLinux Governor MySQL/MariaDB/Percona types.
 
-    Prefer MODULE_STREAMS; if missing, derive stream from the type string (e.g. mariadb1012 ->
-    mariadb:cl-MariaDB1012) so newer CL releases work before this table is updated.
+    Prefer MODULE_STREAMS, which lists the streams we have confirmed exist.  Otherwise
+    read the stream off the configured cl-mysql-meta repository, which spells the
+    version the same way the stream does.  Only when no repository is available does
+    this fall back to deriving from the type token, which cannot recover a minor
+    version whose leading zero Governor dropped.
+
+    :param clmysql_type: Governor DB type token, e.g. ``mariadb1104`` or ``mariadb114``
+    :param baseurl: cl-mysql-meta baseurl, when one has been matched to the installed DB
     """
     if not clmysql_type:
         return None, None
@@ -147,6 +181,14 @@ def resolve_clmysql_module_stream(clmysql_type):
     entry = MODULE_STREAMS.get(clmysql_type)
     if entry:
         mod_name, mod_stream = entry.split(":", 1)
+        return mod_name, mod_stream
+
+    mod_name, mod_stream = clmysql_module_stream_from_url(baseurl)
+    if mod_name and mod_stream:
+        api.current_logger().debug(
+            "Derived DNF module {}:{} for CL-MySQL type '{}' from the configured repository."
+            .format(mod_name, mod_stream, clmysql_type)
+        )
         return mod_name, mod_stream
 
     match = re.match(r"^(mariadb)(\d+)$", clmysql_type)
