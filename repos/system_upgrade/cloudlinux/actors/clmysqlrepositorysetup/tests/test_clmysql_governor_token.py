@@ -22,6 +22,8 @@ from leapp.libraries.actor.clmysqlrepositorysetup import MySqlRepositorySetupLib
 # Verbatim from http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-11.04-common.repo
 _BASEURL_1104 = "http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-11.04/$basearch/"
 _BASEURL_1108 = "http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/cl-mariadb-11.08/$basearch/"
+# A URL whose version component Leapp cannot read at all.
+_BASEURL_UNREADABLE = "http://repo.cloudlinux.com/other/cl$releasever/mysqlmeta/current/$basearch/"
 
 
 class TestGovernorTokenSpelling:
@@ -92,3 +94,40 @@ class TestGovernorTokenSpelling:
         hint = reporting.create_report.report_fields["detail"]["remediations"][0]["context"]
         assert "-common.repo" not in hint
         assert "mysqlgovernor.py --install --yes" in hint
+
+
+class TestUnreadableRepoUrl:
+    """
+    A cl-mysql-meta URL whose version cannot be read must inhibit. Comparing parsed
+    versions replaced a substring test that inhibited on anything unrecognised, and
+    for a while an unreadable URL slipped through: the repository was copied,
+    force-enabled and handed to the upgrade without ever being checked.
+    """
+
+    def test_unreadable_url_inhibits(self, patch_env, make_cl_mysql_repofile):
+        patch_env(clmysql_type="mariadb114")
+
+        lib = MySqlRepositorySetupLibrary()
+        clmysql_process(
+            lib,
+            "cl-mysql",
+            make_cl_mysql_repofile(cl_mysql_meta_baseurl=_BASEURL_UNREADABLE),
+        )
+
+        assert reporting.create_report.called == 1
+        assert "cloudlinux" not in lib.mysql_types
+        assert lib.custom_repo_msgs == []
+
+    def test_unreadable_url_says_why(self, patch_env, make_cl_mysql_repofile):
+        patch_env(clmysql_type="mariadb114")
+
+        lib = MySqlRepositorySetupLibrary()
+        clmysql_process(
+            lib,
+            "cl-mysql",
+            make_cl_mysql_repofile(cl_mysql_meta_baseurl=_BASEURL_UNREADABLE),
+        )
+
+        summary = reporting.create_report.report_fields["summary"]
+        assert "does not name a database version" in summary
+        assert _BASEURL_UNREADABLE in summary

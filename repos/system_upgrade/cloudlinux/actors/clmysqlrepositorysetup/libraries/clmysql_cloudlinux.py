@@ -108,37 +108,54 @@ def clmysql_process(lib, repofile_name, repofile_data):
                 # for the DNF module stream, which the type token cannot spell reliably.
                 lib.clmysql_meta_baseurl = repo_data.baseurl
                 continue
+            # Either the repository describes a different version, or its URL cannot be
+            # read at all. Both mean the repository cannot be confirmed to match the
+            # installed database, and an unconfirmable repository is exactly what this
+            # check exists to stop - letting it through would hand the upgrade a
+            # repository nobody has validated.
             if repo_version is None:
-                continue
-            api.current_logger().warning(
-                "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "
-                "(repo describes {}.{}, installed is {}.{})."
-                .format(
-                    repo_data.baseurl, lib.clmysql_type,
-                    repo_version[1], repo_version[2],
-                    detected_version[1], detected_version[2],
+                api.current_logger().warning(
+                    "cl-mysql-meta repo baseurl '{}' does not name a recognisable database "
+                    "version; cannot confirm it matches the installed type '{}'."
+                    .format(repo_data.baseurl, lib.clmysql_type)
                 )
-            )
+                detail = (
+                    "the cl-mysql-meta repository URL does not name a database version that "
+                    "Leapp can read: '{0}'. Leapp cannot confirm that this repository provides "
+                    "the installed database, and will not upgrade against a repository it "
+                    "cannot verify.".format(repo_data.baseurl)
+                )
+            else:
+                api.current_logger().warning(
+                    "cl-mysql-meta repo baseurl '{}' does not match detected DB type '{}' "
+                    "(repo describes {}.{}, installed is {}.{})."
+                    .format(
+                        repo_data.baseurl, lib.clmysql_type,
+                        repo_version[1], repo_version[2],
+                        detected_version[1], detected_version[2],
+                    )
+                )
+                detail = (
+                    "the cl-mysql-meta repository is configured for {0} {1}.{2} while the "
+                    "installed database is {3} {4}.{5}: '{6}'.".format(
+                        repo_version[0], repo_version[1], repo_version[2],
+                        detected_version[0], detected_version[1], detected_version[2],
+                        repo_data.baseurl,
+                    )
+                )
             reporting.create_report(
                 [
                     reporting.Title(
                         "cl-mysql.repo does not match the installed database type"
                     ),
                     reporting.Summary(
-                        "The cl-mysql-meta repository is configured for a different "
-                        "database version than what is actually installed. "
-                        "The installed database is {0} {1}.{2}, but the cl-mysql-meta "
-                        "repo URL points to {3} {4}.{5}: '{6}'. "
-                        "This may happen when the database version was changed "
-                        "without a follow-up '/usr/share/lve/dbgovernor/mysqlgovernor.py --install', or the "
-                        "cl-mysql.repo file was manually edited. "
-                        "Proceeding with the wrong repository would result in "
-                        "an incorrect upgrade operation."
-                        .format(
-                            detected_version[0], detected_version[1], detected_version[2],
-                            repo_version[0], repo_version[1], repo_version[2],
-                            repo_data.baseurl,
-                        )
+                        "The database packages that the upgrade installs come from the "
+                        "cl-mysql-meta repository, so it has to describe the database that is "
+                        "actually installed. Here {0} "
+                        "This may happen when the database version was changed without a "
+                        "follow-up '/usr/share/lve/dbgovernor/mysqlgovernor.py --install', or "
+                        "when the cl-mysql.repo file was edited by hand. Proceeding would "
+                        "result in an incorrect upgrade operation.".format(detail)
                     ),
                     reporting.Severity(reporting.Severity.HIGH),
                     reporting.Groups(

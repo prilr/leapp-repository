@@ -3,7 +3,9 @@ import os
 import pytest
 
 from leapp.libraries.common.clmysql import (
+    MODULE_STREAMS,
     ClMysqlTypeStatus,
+    canonical_clmysql_type,
     _clmysql_name_version_from_rpm,
     _get_clmysql_type_from_governor,
     _resolve_mysqld_path,
@@ -164,6 +166,15 @@ class TestResolveClmysqlModuleStream(object):
         """
         url = "http://repo.cloudlinux.com/other/cl8/mysqlmeta/cl-mariadb-11.08/$basearch/"
         assert resolve_clmysql_module_stream("mariadb118", baseurl=url) == ("mariadb", "cl-MariaDB1108")
+
+    def test_confirmed_entry_is_reachable_from_the_cached_spelling(self):
+        """
+        Governor caches "mariadb114"; the confirmed table entry is "mariadb1104". A caller
+        deciding whether the stream was verified has to canonicalise first, or it will
+        report a table-backed stream as though it had been guessed.
+        """
+        assert canonical_clmysql_type("mariadb114") in MODULE_STREAMS
+        assert canonical_clmysql_type("mariadb124") not in MODULE_STREAMS
 
     def test_rpm_derived_token_resolves_to_confirmed_stream(self):
         """
