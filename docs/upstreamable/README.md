@@ -56,6 +56,21 @@ both worse than a merge conflict - a conflict at least announces itself. See
 | [CLOS-2565](CLOS-2565-overlay-shared-mount-points.md) - force shared mount points during overlay creation | oamg `common/libraries/{mounting,overlaygen}.py` | candidate |
 | [repomaputils-bom](repomaputils-bom.md) - strip UTF-8 BOM from `repomaputils.py` | AlmaLinux only | candidate |
 | [to-keep-excluded-from-to-upgrade](to-keep-excluded-from-to-upgrade.md) - should `to_keep` suppress upgrades? | oamg - ask before patching | question |
+| [CLOS-4518](CLOS-4518-cron-to-timer-preset-migration.md) - timers left disabled by a cron-to-timer migration | oamg `common/`, replacing `el8toel9/actors/enablelogrotatetimer` | candidate |
+| [CLOS-4518](CLOS-4518-preset-template-instance-unit-type.md) - preset template instances always expand to `.service` | oamg `common/libraries/systemd.py` | candidate |
+| [preset-file-ordering](preset-file-ordering.md) - preset files ordered by path, not filename | oamg `common/libraries/systemd.py` | candidate (no fix carried) |
+
+## Rebase hazards flagged by these entries
+
+The directory exists partly to catch cases git cannot flag. Two are live right now,
+both from `CLOS-4518-cron-to-timer-preset-migration.md`:
+
+- `AlmaLinux/almalinux-ng-0.24.0` carries `el8toel9/actors/enablelogrotatetimer`,
+  which we do not have. It arrives as a clean add on the next rebase and silently
+  voids our administrator-intent guarantee for `logrotate.timer`. **Delete it on
+  arrival** rather than resolving anything.
+- oamg PR 1571 (open) rewrites `transitionsystemdservicesstates`, the same library
+  our `3cf318e2` / `451d923e` change. Rebuild ours on top of theirs if it lands.
 
 ## Closed
 
