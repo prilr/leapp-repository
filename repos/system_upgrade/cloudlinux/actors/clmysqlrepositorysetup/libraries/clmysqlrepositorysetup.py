@@ -17,6 +17,8 @@ from leapp.libraries.common.cl_repofileutils import (
 )
 from leapp.libraries.common.clmysql import (
     MODULE_STREAMS,
+    canonical_clmysql_type,
+    clmysql_module_stream_from_url,
     construct_repomap_data,
     get_pkg_prefix,
     resolve_clmysql_module_stream,
@@ -122,22 +124,32 @@ class MySqlRepositorySetupLibrary(object):
                 self.clmysql_type, baseurl=self.clmysql_meta_baseurl
             )
             if mod_name and mod_stream:
-                if self.clmysql_type not in MODULE_STREAMS:
+                # Ask where the stream actually came from. Governor caches a spelling that
+                # MODULE_STREAMS does not list ("mariadb114" for MariaDB 11.4), so testing
+                # the raw token would report a verified stream as though it had been guessed.
+                if canonical_clmysql_type(self.clmysql_type) in MODULE_STREAMS:
+                    stream_source = None
+                elif clmysql_module_stream_from_url(self.clmysql_meta_baseurl)[1] == mod_stream:
+                    stream_source = "the configured cl-mysql repository"
+                else:
+                    stream_source = "the detected database type"
+
+                if stream_source:
                     api.current_logger().warning(
-                        "CL database type {} is not in MODULE_STREAMS; using derived DNF module {}:{}. "
-                        "Add an explicit MODULE_STREAMS entry when this stream is product-supported."
-                        .format(self.clmysql_type, mod_name, mod_stream)
+                        "CL database type {} is not in MODULE_STREAMS; using DNF module {}:{} derived "
+                        "from {}. Add an explicit MODULE_STREAMS entry when this stream is "
+                        "product-supported."
+                        .format(self.clmysql_type, mod_name, mod_stream, stream_source)
                     )
                     reporting.create_report(
                         [
                             reporting.Title("CloudLinux database module stream was derived automatically"),
                             reporting.Summary(
                                 "The active CloudLinux MySQL/MariaDB/Percona type ({0}) has no explicit Leapp "
-                                "MODULE_STREAMS entry. Leapp will enable DNF module {1}:{2}, derived from the "
-                                "configured cl-mysql repository. If the upgrade fails, confirm this module exists "
-                                "for the target OS and add MODULE_STREAMS in Leapp if the product stream name "
-                                "differs."
-                                .format(self.clmysql_type, mod_name, mod_stream)
+                                "MODULE_STREAMS entry. Leapp will enable DNF module {1}:{2}, derived from "
+                                "{3}. If the upgrade fails, confirm this module exists for the target OS and "
+                                "add MODULE_STREAMS in Leapp if the product stream name differs."
+                                .format(self.clmysql_type, mod_name, mod_stream, stream_source)
                             ),
                             reporting.Severity(reporting.Severity.MEDIUM),
                             reporting.Groups([reporting.Groups.REPOSITORY, reporting.Groups.OS_FACTS]),
