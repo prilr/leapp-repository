@@ -1,6 +1,6 @@
 # Surface dnf output when setting the dnf configuration fails
 
-- **Status:** obsolete - upstream implemented the same thing, better, on 2026-04-24
+- **Status:** supersedes-ours (inbound) - upstream implemented the same thing, better, on 2026-04-24; take theirs
 - **Ours:** commit `e6895c85` (dshibut@cloudlinux.com, 2025-01-10), in
   `repos/system_upgrade/common/libraries/dnfconfig.py`
 - **Upstream:** `bcc445b1` (pstodulk@redhat.com, 2026-04-24),

@@ -1,6 +1,6 @@
 # CLOS-2816 - cap disk image size to the filesystem file size limit
 
-- **Status:** obsolete - upstream capped image size differently, before we did
+- **Status:** supersedes-ours (inbound) - upstream capped image size differently, before we did; drop ours at the rebase
 - **Ours:** commit `c719cca5` (2026-05-14), `repos/system_upgrade/common/libraries/overlaygen.py`
 - **Upstream:** `cef28257` (mhecko@redhat.com, 2024-10-25),
   `lib(overlay): cap the max size of disk images`

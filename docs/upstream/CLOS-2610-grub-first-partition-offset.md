@@ -1,6 +1,6 @@
 # CLOS-2610 - grub `grub_real_boot_time` symbol not found
 
-- **Status:** not upstreamable - the fix is upstream's own, cherry-picked here
+- **Status:** mapped (reference) - not upstreamable; the fix is upstream's own, cherry-picked here
 - **Ours:** nothing of our own; `982f3b7c` is a cherry-pick
 - **Upstream:** `982f3b7c` here, from upstream `ea6cd791`
   (mhecko@redhat.com, [RHEL-3341](https://issues.redhat.com/browse/RHEL-3341)),

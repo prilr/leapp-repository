@@ -1,6 +1,6 @@
 # Anything el7toel8-only has no upstream home
 
-- **Status:** not upstreamable - closes a whole class, not a single change
+- **Status:** mapped (reference) - not upstreamable; closes a whole class, not a single change
 - **Upstream:** oamg `b6e84f79` (2025-06-04), `Drop el7toel8 leapp repository`
 - **Checked against:** oamg/main `65ca51d5` (0.25.0, 2026-07-30),
   `AlmaLinux/almalinux-ng-0.24.0`

@@ -1,8 +1,6 @@
 # Preset files are ordered by path, not by filename
 
-- **Status:** candidate - **we carry no fix**, so there is nothing to drop at a
-  rebase; this is a defect report we owe upstream, recorded so the analysis is not
-  redone
+- **Status:** mapped (reference) - upstream defect, deliberately not patched here; nothing to drop at a rebase
 - **Ours:** nothing. Deliberately not patched - see below.
 - **Upstream target:** oamg `repos/system_upgrade/common/libraries/systemd.py`
   (`_get_system_preset_files`)

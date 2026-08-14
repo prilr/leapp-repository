@@ -1,6 +1,6 @@
 # CLOS-4518 - timers left disabled by a cron-to-timer migration
 
-- **Status:** candidate - and see the rebase hazard below, which is the urgent half
+- **Status:** candidate (outbound) - and see the inbound hazard below, which is the urgent half
 - **Ours:**
   - `repos/system_upgrade/cloudlinux/models/systemdtimers.py`
   - `repos/system_upgrade/cloudlinux/actors/scansystemdtimerssource/`
