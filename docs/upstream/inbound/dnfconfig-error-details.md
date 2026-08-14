@@ -48,4 +48,4 @@ resolve by deleting ours. Two related notes for the same file:
 
 Only the `_set_excluded_pkgs()` half of `e6895c85` is covered here. The same
 error shape also appears in our `_set_repository_state()`, which is our own
-function and travels with `restore-repository-states.md`.
+function and travels with `../outbound/restore-repository-states.md`.

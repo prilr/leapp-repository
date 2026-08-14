@@ -86,30 +86,16 @@ Ours is a strict superset on three axes, and the differences are the argument:
 So the offer to upstream is "replace `enablelogrotatetimer` with the general
 rule", not "add another timer actor beside it".
 
-## Rebase hazard - act on this before the next rebase
+## Two inbound hazards come out of this
 
-`enablelogrotatetimer` is **not** in our tree, which is why CLOS-4518 reproduced
-here at all. But it *is* in `AlmaLinux/almalinux-ng-0.24.0`, our direct upstream.
-The next rebase therefore imports it, and we end up with two mechanisms acting on
-`logrotate.timer`:
+Both have their own entries, because the action belongs where a rebase looks:
 
-- ours declining to touch it when the administrator disabled it on the source,
-- theirs enabling it anyway, later in the same run (FinalizationPhase vs our
-  FirstBoot - theirs is *earlier*, ours would not re-disable it).
-
-The net effect is that inheriting their actor silently voids our admin-intent
-guarantee. Git will not flag this: the file is new on their side and absent on
-ours, so it arrives as a clean add. **At the next rebase, delete
-`el8toel9/actors/enablelogrotatetimer` (and its tests) rather than resolving
-anything**, unless our pair has been upstreamed by then - in which case theirs is
-already gone.
-
-Second hazard, same area: oamg PR **1571** (open, draft as of 2026-08-13) rewrites
-`transitionsystemdservicesstates` - the same library and test file as our
-`3cf318e2` / `451d923e` - to fix which services land in the 'newly enabled' and
-'kept enabled' reports. It reasons about exactly the source-state/target-preset
-combinations our new-unit path introduces. Read it before rebasing; if it lands,
-our change should be rebuilt on top of theirs rather than merged past it.
+- [../inbound/enablelogrotatetimer.md](../inbound/enablelogrotatetimer.md) -
+  their narrow actor arrives as a clean add and silently voids the
+  administrator-intent guarantee described above. Delete it at the rebase.
+- [../inbound/transitionsystemdservicesstates-oamg-1571.md](../inbound/transitionsystemdservicesstates-oamg-1571.md) -
+  an open upstream PR rewrites the same library our `3cf318e2` / `451d923e`
+  change. Rebuild ours on top of theirs if it lands.
 
 ## Upstream form
 

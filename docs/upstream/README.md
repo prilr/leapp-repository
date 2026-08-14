@@ -53,7 +53,7 @@ worth checking by hand, because git will not flag it: if upstream now covers the
 condition, delete our version instead of resolving a conflict. Two actors
 inhibiting on one condition, or a patch that has quietly become dead code, are
 both worse than a merge conflict - a conflict at least announces itself. See
-`CLOS-2816-disk-image-size-cap.md` for a case that already happened, and the
+`inbound/CLOS-2816-disk-image-size-cap.md` for a case that already happened, and the
 `hazard` rows below for ones that have not happened yet.
 
 ## Direction of travel
@@ -74,32 +74,32 @@ Every entry is one of three, and the direction decides what you do with it:
 
 | Change | Upstream target | Status |
 |---|---|---|
-| [CLOS-3465](CLOS-3465-netdev-fstab-inhibitor.md) - inhibit on `_netdev` in fstab without `nofail` | oamg `common/actors/checkmountoptions` | candidate |
-| [CLOS-4330](CLOS-4330-networkmanager-unmanaged-devices.md) - inhibit when NetworkManager manages no device | oamg `el8toel9/actors/checkifcfg` | candidate |
-| [restore-repository-states](restore-repository-states.md) - restore repo enabled/disabled state after upgrade | oamg `common/` (new actor + `dnfconfig`) | candidate |
-| [CLOS-2565](CLOS-2565-overlay-shared-mount-points.md) - force shared mount points during overlay creation | oamg `common/libraries/{mounting,overlaygen}.py` | candidate |
-| [repomaputils-bom](repomaputils-bom.md) - strip UTF-8 BOM from `repomaputils.py` | AlmaLinux only | candidate |
-| [to-keep-excluded-from-to-upgrade](to-keep-excluded-from-to-upgrade.md) - should `to_keep` suppress upgrades? | oamg - ask before patching | question |
-| [CLOS-4518](CLOS-4518-cron-to-timer-preset-migration.md) - timers left disabled by a cron-to-timer migration | oamg `common/`, replacing `el8toel9/actors/enablelogrotatetimer` | candidate |
-| [CLOS-4518](CLOS-4518-preset-template-instance-unit-type.md) - preset template instances always expand to `.service` | oamg `common/libraries/systemd.py` | candidate |
-| [vendors-and-to-reinstall](vendors-and-to-reinstall.md) - `vendors.d` handling and `to_reinstall` | AlmaLinux (done) / oamg (`to_reinstall` still offerable) | merged |
+| [CLOS-3465](outbound/CLOS-3465-netdev-fstab-inhibitor.md) - inhibit on `_netdev` in fstab without `nofail` | oamg `common/actors/checkmountoptions` | candidate |
+| [CLOS-4330](outbound/CLOS-4330-networkmanager-unmanaged-devices.md) - inhibit when NetworkManager manages no device | oamg `el8toel9/actors/checkifcfg` | candidate |
+| [restore-repository-states](outbound/restore-repository-states.md) - restore repo enabled/disabled state after upgrade | oamg `common/` (new actor + `dnfconfig`) | candidate |
+| [CLOS-2565](outbound/CLOS-2565-overlay-shared-mount-points.md) - force shared mount points during overlay creation | oamg `common/libraries/{mounting,overlaygen}.py` | candidate |
+| [repomaputils-bom](outbound/repomaputils-bom.md) - strip UTF-8 BOM from `repomaputils.py` | AlmaLinux only | candidate |
+| [to-keep-excluded-from-to-upgrade](outbound/to-keep-excluded-from-to-upgrade.md) - should `to_keep` suppress upgrades? | oamg - ask before patching | question |
+| [CLOS-4518](outbound/CLOS-4518-cron-to-timer-preset-migration.md) - timers left disabled by a cron-to-timer migration | oamg `common/`, replacing `el8toel9/actors/enablelogrotatetimer` | candidate |
+| [CLOS-4518](outbound/CLOS-4518-preset-template-instance-unit-type.md) - preset template instances always expand to `.service` | oamg `common/libraries/systemd.py` | candidate |
+| [vendors-and-to-reinstall](outbound/vendors-and-to-reinstall.md) - `vendors.d` handling and `to_reinstall` | AlmaLinux (done) / oamg (`to_reinstall` still offerable) | merged |
 
 ## Inbound - theirs, decide at the next rebase
 
 | What arrives | Where from | Do |
 |---|---|---|
-| `el8toel9/actors/enablelogrotatetimer` - unconditional `enable_unit('logrotate.timer')` | `AlmaLinux/almalinux-ng-0.24.0` (oamg PR 1501, RHEL-17361) | **hazard** - clean add, no conflict. It overrides the administrator-intent rule in [CLOS-4518](CLOS-4518-cron-to-timer-preset-migration.md). Delete it on arrival unless ours has been upstreamed by then |
-| `transitionsystemdservicesstates` rewrite - report membership fix | oamg PR 1571 (open, draft) | **hazard** - touches the same library and tests as our `3cf318e2` / `451d923e`. Rebuild ours on top of theirs rather than merging past |
-| disk image size cap | oamg | **supersedes-ours** - upstream capped it differently; drop ours ([CLOS-2816](CLOS-2816-disk-image-size-cap.md)) |
-| `dnfconfig` error details | oamg | **supersedes-ours** - upstream did the same thing better 15 months later; take theirs ([dnfconfig-error-details](dnfconfig-error-details.md)) |
+| [`el8toel9/actors/enablelogrotatetimer`](inbound/enablelogrotatetimer.md) - unconditional `enable_unit('logrotate.timer')` | `AlmaLinux/almalinux-ng-0.24.0` (oamg PR 1501, RHEL-17361) | **hazard** - clean add, no conflict. It overrides the administrator-intent rule in [CLOS-4518](outbound/CLOS-4518-cron-to-timer-preset-migration.md). Delete it on arrival unless ours has been upstreamed by then |
+| [`transitionsystemdservicesstates` rewrite](inbound/transitionsystemdservicesstates-oamg-1571.md) - report membership fix | oamg PR 1571 (open, draft) | **hazard** - touches the same library and tests as our `3cf318e2` / `451d923e`. Rebuild ours on top of theirs rather than merging past |
+| disk image size cap | oamg | **supersedes-ours** - upstream capped it differently; drop ours ([CLOS-2816](inbound/CLOS-2816-disk-image-size-cap.md)) |
+| `dnfconfig` error details | oamg | **supersedes-ours** - upstream did the same thing better 15 months later; take theirs ([dnfconfig-error-details](inbound/dnfconfig-error-details.md)) |
 
 ## Reference - mapped, nothing to do
 
 | Item | Why it is here |
 |---|---|
-| [preset-file-ordering](preset-file-ordering.md) - preset files ordered by path, not filename | upstream defect we deliberately did not patch; the analysis is the artifact |
-| [CLOS-2610](CLOS-2610-grub-first-partition-offset.md) - grub first-partition offset | nothing to offer - the fix was upstream's own, cherry-picked here |
-| [el7toel8-retired-upstream](el7toel8-retired-upstream.md) | closes a whole class - upstream deleted the el7toel8 repo |
+| [preset-file-ordering](reference/preset-file-ordering.md) - preset files ordered by path, not filename | upstream defect we deliberately did not patch; the analysis is the artifact |
+| [CLOS-2610](reference/CLOS-2610-grub-first-partition-offset.md) - grub first-partition offset | nothing to offer - the fix was upstream's own, cherry-picked here |
+| [el7toel8-retired-upstream](reference/el7toel8-retired-upstream.md) | closes a whole class - upstream deleted the el7toel8 repo |
 
 Status values:
 
@@ -130,7 +130,21 @@ directory was renamed from `upstreamable/` may still use it.
 
 1. Add a file and an index row, in the same PR that introduces the divergence -
    or, for an inbound or reference item, as soon as you learn it.
-   Name it `<TICKET>-<slug>.md`, or just `<slug>.md` when there is no ticket.
+   Name it `<TICKET>-<slug>.md`, or just `<slug>.md` when there is no ticket, and
+   put it in the subdirectory matching its direction:
+
+   ```
+   docs/upstream/
+     outbound/    ours, worth offering upstream
+     inbound/     theirs, arriving - read this whole folder before a rebase
+     reference/   mapped, nothing to do
+   ```
+
+   One finding can produce entries in more than one direction: our timer fix is
+   outbound, and the upstream actor it collides with is inbound. Give each its own
+   file and cross-link them, rather than describing the inbound action inside the
+   outbound entry - at a rebase `inbound/` is what gets read, and an instruction
+   filed anywhere else will be missed.
 2. Add a commit trailer so the set is greppable from history and a missing file
    is detectable. `Upstreamable:` for outbound, `RebaseHazard:` for inbound items
    that need action at the next rebase:
@@ -205,7 +219,7 @@ so nobody spends the effort twice:
   CloudLinux-only branch of `userspacegen.py` that has no upstream counterpart.
 - `f4959c13` (repofile parser under Python 3.6) - fixes our own `save_repofile`,
   which upstream does not have. It travels with
-  `restore-repository-states.md` or not at all.
+  `outbound/restore-repository-states.md` or not at all.
 - Anything touching `repos/system_upgrade/cloudlinux/`, CLN, cl-MySQL/Governor,
   CageFS, or control-panel detection - CloudLinux-specific by construction. The
   exception is an actor that only *lives* there for packaging reasons while its
