@@ -82,15 +82,6 @@ endif
 # someone will call copr_build without additional parameters
 MASTER_BRANCH=master
 
-# In case the PR or MR is defined or in case build is not coming from the
-# MATER_BRANCH branch, N_REL=0; (so build is not update of the approved
-# upstream solution). For upstream builds N_REL=100;
-N_REL=`_NR=$${PR:+0}; if test "$${_NR:-100}" == "100"; then _NR=$${MR:+0}; fi; git rev-parse --abbrev-ref HEAD | grep -qE "^($(MASTER_BRANCH)|stable)$$" || _NR=0;  echo $${_NR:-100}`
-
-TIMESTAMP:=$${__TIMESTAMP:-$(shell /bin/date -u "+%Y%m%d%H%MZ")}
-SHORT_SHA=`git rev-parse --short HEAD`
-BRANCH=`git rev-parse --abbrev-ref HEAD | tr -- '-/' '_'`
-
 # The dependent framework PR connection will be taken from the top commit's depends-on message.
 REQ_LEAPP_PR=$(shell git log master..HEAD | grep -m1 -iE '^[[:space:]]*Depends-On:[[:space:]]*.*[[:digit:]]+[[:space:]]*$$' | grep -Eo '*[[:digit:]]*')
 # NOTE(ivasilev) In case of travis relying on top commit is a no go as a top commit will be a merge commit.
@@ -98,19 +89,28 @@ ifdef CI
 	REQ_LEAPP_PR=$(shell git log master..HEAD | grep -m1 -iE '^[[:space:]]*Depends-On:[[:space:]]*.*[[:digit:]]+[[:space:]]*$$' | grep -Eo '[[:digit:]]*')
 endif
 
-# In case anyone would like to add any other suffix, just make it possible
-_SUFFIX=`if test -n "$$SUFFIX"; then echo ".$${SUFFIX}"; fi; `
-
-# generate empty string if PR or MR are not specified, otherwise set one of them
-REQUEST=`if test -n "$$PR"; then echo ".PR$${PR}"; elif test -n "$$MR"; then echo ".MR$${MR}"; fi; `
-
-# replace "custombuild" with some a describing your build
-# Examples:
-#    0.201810080027Z.4078402.packaging.PR2
-#    0.201810080027Z.4078402.packaging
-#    0.201810080027Z.4078402.master.MR2
-#    1.201810080027Z.4078402.master
-RELEASE="$(N_REL).$(TIMESTAMP).$(SHORT_SHA).$(BRANCH)$(REQUEST)$(_SUFFIX)"
+# The release number comes from the spec, read the same way VERSION is.
+#
+# Upstream does the opposite: its spec carries the placeholder `Release: 1%{?dist}` and
+# the Makefile stamps a computed release over it for COPR scratch builds -
+# `$(N_REL).$(TIMESTAMP).$(SHORT_SHA).$(BRANCH)`, whose leading N_REL was 100 off master
+# and 0 elsewhere so a scratch build sorted above or below the released package on
+# purpose. This fork does not use COPR, builds only from release tags, and keys the Jira
+# fixVersion, the spec and the tag to one X.Y.Z-R - so every input to that scheme is
+# constant, and the identification fields (commit, branch) duplicate what the build
+# record already stores.
+#
+# It also actively broke releases. The stamping sed matched `1%{?dist}` as an unanchored
+# SUBSTRING, so a real release number containing it was mangled rather than replaced:
+# `Release: 11%{?dist}.cloudlinux` became
+# `Release: 10.202608141010Z.b80470e8.HEAD%{?dist}.cloudlinux`, and 0.20.0-11 was built
+# that way and discarded. Releases -2 through -10 survived only because their numbers do
+# not contain the pattern. The stamping is gone rather than anchored, because keeping a
+# mechanism that rewrites the one number the release process assigns buys nothing here.
+#
+# `make lint-spec-release` (utils/check-spec-release.py) guards this.
+RELEASE=`grep -m1 "^Release:" packaging/$(PKGNAME).spec | sed -E "s/^Release:[[:space:]]*//; s/%.*//"`
+DEPS_RELEASE=`grep -m1 "^Release:" packaging/other_specs/$(DEPS_PKGNAME).spec | sed -E "s/^Release:[[:space:]]*//; s/%.*//"`
 
 all: help
 
@@ -251,27 +251,23 @@ source: prepare
 	@git archive --prefix "$(PKGNAME)-$(VERSION)/" -o "packaging/sources/$(PKGNAME)-$(VERSION).tar.gz" HEAD
 	@echo "--- PREPARE DEPS PKGS ---"
 	mkdir -p packaging/tmp/
-	@__TIMESTAMP=$(TIMESTAMP) $(MAKE) _build_subpkg
-	@__TIMESTAMP=$(TIMESTAMP) $(MAKE) DIST_VERSION=$$(($(DIST_VERSION) + 1)) _build_subpkg
+	@$(MAKE) _build_subpkg
+	@$(MAKE) DIST_VERSION=$$(($(DIST_VERSION) + 1)) _build_subpkg
 	@tar -czf packaging/sources/deps-pkgs.tar.gz -C packaging/RPMS/noarch `ls -1 packaging/RPMS/noarch | grep -o "[^/]*rpm$$"`
 	@rm -f packaging/RPMS/noarch/*.rpm
 
 srpm: source
 	@echo "--- Build SRPM: $(PKGNAME)-$(VERSION)-$(RELEASE).. ---"
-	@cp packaging/$(PKGNAME).spec packaging/$(PKGNAME).spec.bak
-	@sed -i "s/1%{?dist}/$(RELEASE)%{?dist}/g" packaging/$(PKGNAME).spec
 	@rpmbuild -bs packaging/$(PKGNAME).spec \
 		--define "_sourcedir `pwd`/packaging/sources"  \
 		--define "_srcrpmdir `pwd`/packaging/SRPMS" \
 		--define "rhel $(DIST_VERSION)" \
 		--define 'dist .el$(DIST_VERSION)' \
 		--define 'el$(DIST_VERSION) 1' || FAILED=1
-	@mv packaging/$(PKGNAME).spec.bak packaging/$(PKGNAME).spec
 
 _build_subpkg:
-	@echo "--- Build RPM: $(DEPS_PKGNAME)-$(DEPS_VERSION)-$(RELEASE).. ---"
+	@echo "--- Build RPM: $(DEPS_PKGNAME)-$(DEPS_VERSION)-$(DEPS_RELEASE).. ---"
 	@cp packaging/other_specs/$(DEPS_PKGNAME).spec packaging/$(DEPS_PKGNAME).spec
-	@sed -i "s/1%{?dist}/$(RELEASE)%{?dist}/g" packaging/$(DEPS_PKGNAME).spec
 	# Let's be explicit about the path to the binary RPMs; Copr builders can override this
 	# IMPORTANT:
 	# Also, explicitly set the _rpmfilename macro. This is super important as
@@ -297,8 +293,6 @@ _build_subpkg:
 
 _build_local: source
 	@echo "--- Build RPM: $(PKGNAME)-$(VERSION)-$(RELEASE).. ---"
-	@cp packaging/$(PKGNAME).spec packaging/$(PKGNAME).spec.bak
-	@sed -i "s/1%{?dist}/$(RELEASE)%{?dist}/g" packaging/$(PKGNAME).spec
 	@rpmbuild -ba packaging/$(PKGNAME).spec \
 		--define "_sourcedir `pwd`/packaging/sources"  \
 		--define "_srcrpmdir `pwd`/packaging/SRPMS" \
@@ -308,7 +302,6 @@ _build_local: source
 		--define "rhel $(DIST_VERSION)" \
 		--define "dist .el$(DIST_VERSION)" \
 		--define "el$(DIST_VERSION) 1" || FAILED=1
-	@mv packaging/$(PKGNAME).spec.bak packaging/$(PKGNAME).spec
 
 build_container:
 	echo "--- Build RPM ${PKGNAME}-${VERSION}-${RELEASE}.el$(DIST_VERSION).rpm in container ---"; \
@@ -400,7 +393,14 @@ lint-non-ascii:
 	if [ -z "$${SEARCH_PATH}" ]; then echo "TEST_PATHS is empty; nothing to scan." >&2; exit 0; fi; \
 	python3 utils/check-non-ascii.py $${SEARCH_PATH}
 
-lint: lint-non-ascii
+# The spec's Release is what the release process assigned; the build must ship it
+# unchanged. Standalone for the same reasons as lint-non-ascii: pure stdlib python3, no
+# lint venv needed, and one source of truth for `make lint` and the CI workflow.
+lint-spec-release:
+	@echo "--- Checking the build ships the release the spec declares ---"
+	@python3 utils/check-spec-release.py
+
+lint: lint-non-ascii lint-spec-release
 	. $(VENVNAME)/bin/activate; \
 	echo "--- Linting ... ---" && \
 	SEARCH_PATH="$(TEST_PATHS)" && \
