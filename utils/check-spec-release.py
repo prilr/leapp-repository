@@ -96,13 +96,34 @@ def main():
         return 1
 
     # 1. the Makefile must report the spec's release
-    proc = subprocess.run(["make", "print_release"], capture_output=True, text=True)
+    #
+    # This runs as a CHILD of make (`make lint-spec-release` -> this script ->
+    # `make print_release`), so the nested make inherits MAKELEVEL and prints
+    # "Entering directory"/"Leaving directory" around the value. Taking the last
+    # line then compared the release against make's own chatter and failed every
+    # pull request:
+    #
+    #     make print_release: make[1]: Leaving directory '/home/runner/...'
+    #
+    # --no-print-directory suppresses them and wins over an inherited `-w`.
+    # The environment is deliberately NOT scrubbed: dropping MAKEFLAGS would
+    # also drop command-line variable overrides, and a `make RELEASE=...`
+    # reaching the build unnoticed is precisely what this check is for.
+    proc = subprocess.run(["make", "--no-print-directory", "print_release"],
+                          capture_output=True, text=True)
     if proc.returncode != 0:
         print("ERROR: `make print_release` failed:\n{0}".format(
             (proc.stderr or proc.stdout).strip()), file=sys.stderr)
         return 1
-    reported = (proc.stdout or "").strip().splitlines()
-    reported = reported[-1].strip() if reported else ""
+    # Exactly one line is expected. Say so rather than picking one, so that
+    # anything unforeseen in the output is a legible error instead of a
+    # comparison against the wrong string.
+    lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    if len(lines) != 1:
+        print("ERROR: `make print_release` printed {0} lines, expected 1:\n{1}".format(
+            len(lines), (proc.stdout or "").strip() or "(nothing)"), file=sys.stderr)
+        return 1
+    reported = lines[0]
     if reported != declared:
         failed = True
         print("ERROR: the build would not ship the declared release.", file=sys.stderr)
